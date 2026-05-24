@@ -200,3 +200,16 @@ Most <mark>salamanders</mark> are nocturnal, and hunt for insects, worms, and ot
 ## MDX について
 
 MDX にすると JSX コンポーネントを本文に組み込めます。クライアント JS を増やしたくない方針の場合は、静的生成だけに留まるようコンポーネント選びや `client:*` ディレクティブには注意してください。詳しくは Astro の公式ドキュメントを参照してください。
+
+## mojiemoji（`<Moji>` で楽しい見た目）
+
+`.mdx` 記事では、語を `<Moji emoji="...">` で書くと mojiemoji.jozo.beer のアニメ画像になります。import は不要です（全 `.mdx` に自動で使えるよう登録済み）。
+
+```mdx
+今日は <Moji emoji="やったー" /> だ。ついに <Moji emoji="完成" /> した。
+```
+
+- `emoji` 属性に語を渡すだけ。色・アニメ・フォントは自動で決まります（同じ語でも出てくる場所で見た目が変わります）。
+- テキストは**属性で渡すので Markdown 変換を受けません**（`*` などがそのまま画像化されます）。子要素 `<Moji>語</Moji>` の形は使いません。
+- mojiemoji は「語レベルのワンポイント」です。文や節をまるごと渡さないでください。1 語は短く（漢字 2 / カタカナ 3 / ひらがな 5 文字くらいが目安）。
+- どうしても見た目を指定したいときだけ `<Moji emoji="回転" animation="kaiten" color="dc2626" />` のように上書きできます（色は 6 桁 hex）。
