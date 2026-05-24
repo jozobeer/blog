@@ -24,7 +24,6 @@ const index = nextIndex();
 const overrides: Partial<MojiParams> = { font, color, animation, speed };
 const params = resolveParams(word, index, overrides);
 const src = buildMojiemojiUrl(word, params);
-const imgLegacyAttrs: Record<string, string> = { align: 'absmiddle' };
 ---
 {word && (
   <img
@@ -32,7 +31,6 @@ const imgLegacyAttrs: Record<string, string> = { align: 'absmiddle' };
     alt={word}
     width={size}
     height={size}
-    {...imgLegacyAttrs}
     loading="lazy"
     decoding="async"
   />

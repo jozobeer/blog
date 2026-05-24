@@ -1,0 +1,6 @@
+/* mojiemoji のインライン画像を本文テキストに対して縦中央へ。
+   align="absmiddle" は行全体の絶対中央でやや下がるため、x-height 基準の middle に合わせる。
+   pico の後に読まれるので上書きが効く。微調整したい場合はここで vertical-align を変える。 */
+img[src*="mojiemoji.jozo.beer"] {
+  vertical-align: middle;
+}
