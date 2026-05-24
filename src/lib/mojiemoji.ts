@@ -8,58 +8,139 @@ export function fnv1a(input: string): number {
   return hash >>> 0;
 }
 
+// 正準 16 フォント（mojiemoji-github lib.constants.CANONICAL_FONTS）
 export const FONTS = [
-  'gothic', 'gothic-bold', 'maru', 'maru-bold', 'mincho', 'dela', 'akzk', 'zero',
-  'kurobara', 'hachimaru', 'chikara', 'tamanegi', 'pixel', 'toge', 'rampart', 'noto',
+  'akzk', 'chikara', 'dela', 'gothic', 'gothic-bold', 'hachimaru',
+  'kurobara', 'maru', 'maru-bold', 'mincho', 'noto', 'pixel',
+  'rampart', 'tamanegi', 'toge', 'zero',
 ] as const;
 
-// inline で潰れる/ block 専用のものは除外（bakusan, chuuou_zoom, mozaiku, kage_kaiten, kage_bokashi）
+// 正準 34 アニメ − INLINE_PROBLEMATIC {bakusan, chuuou_zoom} = 32
 export const ANIMATIONS = [
-  'tate_scroll', 'yoko_scroll', 'ekken', 'tate_ekken', 'bane', 'gatagata', 'bure',
-  'kirari', 'kira', 'tenmetsu', 'shuchusen', 'kaiten', 'neruneru', 'patapata',
-  'yurayura', 'mabataki', 'norinori', 'mochimochi', 'poyoon', 'yatta', 'tatemoya',
-  'nami', 'yokomoya', 'zairu', 'zanzo', 'chirichiri', 'disco', 'psycho', 'kage_neon',
+  'bane', 'bure', 'chirichiri', 'disco', 'ekken', 'gatagata', 'kage_bokashi',
+  'kage_kaiten', 'kage_neon', 'kaiten', 'kira', 'kirari', 'mabataki', 'mochimochi',
+  'mozaiku', 'nami', 'neruneru', 'norinori', 'patapata', 'poyoon', 'psycho',
+  'shuchusen', 'tate_ekken', 'tate_scroll', 'tatemoya', 'tenmetsu', 'yatta',
+  'yoko_scroll', 'yokomoya', 'yurayura', 'zairu', 'zanzo',
 ] as const;
 
-// 白背景で読める 6 桁 hex（おおむね Tailwind 600–700）。名前色は使わない。
+// mojiemoji-github の明るめパレット（Tailwind 300-500）。FORBIDDEN_COLORS(600+) は含めない。
 export const COLORS = [
-  'dc2626', 'ea580c', 'd97706', 'ca8a04', '16a34a', '059669', '0d9488', '0891b2',
-  '0284c7', '2563eb', '4f46e5', '7c3aed', '9333ea', 'c026d3', 'db2777', 'e11d48',
+  'ef4444', 'f87171', 'fca5a5', 'f97316', 'fb923c', 'fdba74', 'f59e0b', 'fbbf24',
+  'facc15', 'fde047', '22c55e', '4ade80', '86efac', '10b981', '34d399', '06b6d4',
+  '22d3ee', '67e8f9', '3b82f6', '60a5fa', '93c5fd', '6366f1', '818cf8', 'a5b4fc',
+  '8b5cf6', 'a78bfa', 'a855f7', 'c084fc', 'd8b4fe', 'ec4899', 'f472b6', 'f9a8d4',
+  '94a3b8',
 ] as const;
+
+// 色相がフレーム毎に回るので outline を落とす（mojiemoji-github COLOR_SHIFTING_ANIMATIONS）
+export const COLOR_SHIFTING_ANIMATIONS = new Set<string>(['kira', 'disco', 'psycho']);
+// グリフが回転するので speed=slow が要る（mojiemoji-github ROTATIONAL_ANIMATIONS）
+export const ROTATIONAL_ANIMATIONS = new Set<string>(['kaiten', 'kage_kaiten']);
 
 export interface MojiParams {
   font: string;
   color: string;
   animation: string;
   speed?: string;
+  outline?: string;
+  outlineWidth?: number;
 }
 
-/** text + 出現位置 index から決定論的に装飾パラメータを導出する。 */
+// --- HSL 変換（mojiemoji_markdown.py を移植。triadic outline 用） ---
+function hexToHsl(hex: string): [number, number, number] {
+  const h = hex.replace(/^#/, '');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn;
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  let hue: number;
+  if (mx === r) hue = (g - b) / d + (g < b ? 6 : 0);
+  else if (mx === g) hue = (b - r) / d + 2;
+  else hue = (r - g) / d + 4;
+  return [((hue * 60) % 360 + 360) % 360, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hFrac = ((((h % 360) + 360) % 360)) / 360;
+  const hueToRgb = (p: number, q: number, t: number): number => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  let r: number;
+  let g: number;
+  let b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hueToRgb(p, q, hFrac + 1 / 3);
+    g = hueToRgb(p, q, hFrac);
+    b = hueToRgb(p, q, hFrac - 1 / 3);
+  }
+  const hex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+  return `${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+/** fill 色から triadic（色相 +120°）の outline 色を導く。 */
+export function triadic(colorHex: string): string {
+  const [h, s, l] = hexToHsl(colorHex);
+  return hslToHex(h + 120, s, l);
+}
+
+/** text + 出現位置 index から font/color/animation を決定論的に選ぶ（生の選択）。 */
 export function deriveParams(text: string, index: number): MojiParams {
   const seed = fnv1a(`${text}#${index}`);
   const h2 = Math.imul(seed, 2654435761) >>> 0;
   const h3 = Math.imul(h2, 2246822519) >>> 0;
-  const font = FONTS[seed % FONTS.length];
-  const color = COLORS[h2 % COLORS.length];
-  const animation = ANIMATIONS[h3 % ANIMATIONS.length];
-  const params: MojiParams = { font, color, animation };
-  if (animation === 'kaiten') params.speed = 'slow'; // 回転は遅くしないと読めない
-  return params;
+  return {
+    font: FONTS[seed % FONTS.length],
+    color: COLORS[h2 % COLORS.length],
+    animation: ANIMATIONS[h3 % ANIMATIONS.length],
+  };
 }
 
-/** 導出値に明示 override をマージする。undefined は無視。kaiten は speed=slow を保証。 */
+/**
+ * deriveParams に override をマージし、mojiemoji-github の描画ルールを適用する:
+ * rotational は speed=slow、color-shifting は outline を落とす、
+ * それ以外は outline=triadic(色相+120°) + outline_width=2。
+ */
 export function resolveParams(
   text: string,
   index: number,
   overrides: Partial<MojiParams> = {},
 ): MojiParams {
   const base = deriveParams(text, index);
-  const merged: MojiParams = { ...base };
-  for (const key of ['font', 'color', 'animation', 'speed'] as const) {
-    const value = overrides[key];
-    if (value !== undefined) merged[key] = value;
+  const merged: MojiParams = {
+    font: overrides.font ?? base.font,
+    color: overrides.color ?? base.color,
+    animation: overrides.animation ?? base.animation,
+  };
+  if (overrides.speed !== undefined) merged.speed = overrides.speed;
+  if (overrides.outline !== undefined) merged.outline = overrides.outline;
+  if (overrides.outlineWidth !== undefined) merged.outlineWidth = overrides.outlineWidth;
+
+  if (ROTATIONAL_ANIMATIONS.has(merged.animation) && !merged.speed) {
+    merged.speed = 'slow';
   }
-  if (merged.animation === 'kaiten' && !merged.speed) merged.speed = 'slow';
+
+  if (COLOR_SHIFTING_ANIMATIONS.has(merged.animation)) {
+    delete merged.outline;
+    delete merged.outlineWidth;
+  } else if (merged.outline === undefined) {
+    merged.outline = triadic(merged.color);
+    merged.outlineWidth = 2;
+  }
   return merged;
 }
 
@@ -73,15 +154,15 @@ export function buildMojiemojiUrl(text: string, params: MojiParams): string {
   query.set('animation', params.animation);
   query.set('background', 'transparent');
   if (params.speed) query.set('speed', params.speed);
+  if (params.outline) query.set('outline', params.outline);
+  if (params.outlineWidth !== undefined) query.set('outline_width', String(params.outlineWidth));
   return `${MOJIEMOJI_BASE}/${encodeURIComponent(text)}?${query.toString()}`;
 }
 
+// ビルド内の出現順カウンタ。モジュール状態としてレンダリング間で保持される
+// （.astro の `---` フロントマターは毎レンダリング再実行されるため、ここに置く）。
 let _occurrence = 0;
 
-/**
- * ビルド内の出現順カウンタ。モジュール状態としてレンダリング間で保持される
- * （.astro の `---` フロントマターは毎レンダリング再実行されるため、カウンタはここに置く）。
- */
 export function nextIndex(): number {
   return _occurrence++;
 }
