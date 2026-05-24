@@ -1,12 +1,58 @@
 ---
 title: 'もじえもじ、はじめました'
-description: '本文の中に小さなアニメ画像を差し込めるようにしました。'
+description: '本文に動く文字を差し込めるようにしました。mojiemoji の紹介と、このブログでの仕組みの話。'
 pubDate: 'May 25 2026'
-author: jozo
+author: hondazn
 ---
 
-このブログでは、文章の中に <Moji emoji="もじ" /> を差し込んで <Moji emoji="楽しく" /> できます。
+本文の中に、<Moji emoji="動く" /><Moji emoji="小さな" /><Moji emoji="文字" />を置けるようにしました。たとえば <Moji emoji="もじ" /> や <Moji emoji="えもじ" /> のように。
 
-同じ語でも、出てくる場所が違えば見た目が変わります。<Moji emoji="やったー" /> と <Moji emoji="やったー" /> は別の表情になります。
+<Moji emoji="正体" />は mojiemoji という<Moji emoji="サービス" />です。
 
-装飾は <Moji emoji="自動" /> なので、書くときは語を渡すだけです。
+## mojiemoji とは
+
+mojiemoji は、<Moji emoji="文字" />を渡すと<Moji emoji="動く" /><Moji emoji="画像" />が返ってくる API です。`OK` と渡せば、<Moji emoji="OK" /> がそのまま返ります。
+
+<Moji emoji="面白い" />のは、**URL がそのまま<Moji emoji="画像" />**だということ。ブラウザで<Moji emoji="ツール" />を開く<Moji emoji="手間" />も、<Moji emoji="登録" />も、<Moji emoji="導入" />も<Moji emoji="不要" />です。
+
+<Moji emoji="文字" /><Moji emoji="絵文字" />を作る<Moji emoji="ツール" />は<Moji emoji="昔" />からありました。ただ<Moji emoji="多く" />は、<Moji emoji="サイト" />を開いて、<Moji emoji="色" />や<Moji emoji="アニメ" />を選んで、できた<Moji emoji="画像" />を<Moji emoji="保存" />して、Slack や Discord に手で<Moji emoji="アップ" />して……という<Moji emoji="手順" />が要りました。mojiemoji はこれを<Moji emoji="全部" />飛ばして、URL を書くだけで<Moji emoji="完了" />です。
+
+`<img>` が書ける<Moji emoji="場所" />なら、<Moji emoji="どこ" />でも使えます。GitHub の README や issue、Zenn、Qiita、Notion、メール、Discord。`curl` で<Moji emoji="ファイル" />として<Moji emoji="保存" />することも。README の<Moji emoji="冒頭" />に shields.io の<Moji emoji="バッジ" />を並べる、あの<Moji emoji="感覚" />で<Moji emoji="文章" />に差し込める、と考えると<Moji emoji="イメージ" />しやすいかもしれません。
+
+<Moji emoji="同じ" /> URL は、いつ叩いても<Moji emoji="同じ" /><Moji emoji="画像" />を返します。だから一度貼った <Moji emoji="了解" /> が、あとから<Moji emoji="勝手" />に<Moji emoji="変わる" /><Moji emoji="心配" />はありません。
+
+<Moji emoji="本家" />はこちら — [mojiemoji.jozo.beer](https://mojiemoji.jozo.beer)。
+
+## このブログでの仕組み
+
+このブログは Astro で作っていて、<Moji emoji="記事" />を MDX で書けます。だから<Moji emoji="本文" />に `<Moji>` を<Moji emoji="そのまま" />置けます。
+
+書き方は<Moji emoji="単純" />で、<Moji emoji="記事" />の中に `<Moji emoji="語" />` と書くと、その <Moji emoji="語" /> が mojiemoji の<Moji emoji="画像" />に<Moji emoji="変身" />します。書くのは<Moji emoji="語" />だけ。<Moji emoji="色" />も<Moji emoji="フォント" />も<Moji emoji="アニメ" />も、こちらでは<Moji emoji="指定" />しません。
+
+<Moji emoji="語" />は<Moji emoji="属性" />に書きます。`*` や `_` のような<Moji emoji="記号" />が混ざっていても、Markdown に<Moji emoji="解釈" />されず、そのまま<Moji emoji="画像" />になるからです。
+
+<Moji emoji="見た目" />は<Moji emoji="自動" />で決まります。しかも、<Moji emoji="同じ" /><Moji emoji="語" />でも出てくる<Moji emoji="場所" />が違えば<Moji emoji="表情" />が変わります。さっきの <Moji emoji="自動" /> と、この <Moji emoji="自動" /> は別の<Moji emoji="見た目" />です。<Moji emoji="語" />そのものと、本文の<Moji emoji="何番目" />に出てきたかの<Moji emoji="両方" />から、<Moji emoji="色" />・<Moji emoji="フォント" />・<Moji emoji="アニメ" />を選んでいるためです。
+
+とはいえ、<Moji emoji="でたらめ" />に選んでいるわけではありません。<Moji emoji="記事" />を変えずに<Moji emoji="ビルド" />し直せば、<Moji emoji="毎回" />まったく<Moji emoji="同じ" /><Moji emoji="見た目" />になります。一度書いた<Moji emoji="記事" />の<Moji emoji="表情" />は <Moji emoji="不変" /> です。これは mojiemoji の「<Moji emoji="同じ" /> URL は<Moji emoji="同じ" /><Moji emoji="画像" />」という<Moji emoji="性質" />と、ちょうど<Moji emoji="噛み合い" />ます。
+
+## 使うときの作法
+
+mojiemoji は、<Moji emoji="語" /><Moji emoji="レベル" />の<Moji emoji="ワン" /><Moji emoji="ポイント" />です。<Moji emoji="文" />や<Moji emoji="節" />をまるごと渡すものではありません。1 語は <Moji emoji="短く" />。<Moji emoji="目安" />は<Moji emoji="漢字" /> 2 文字、<Moji emoji="カナ" /> 3 文字、<Moji emoji="ひらがな" /> 5 文字くらい。<Moji emoji="長い" /><Moji emoji="言葉" />は、<Moji emoji="小さな" /><Moji emoji="画像" />の中で<Moji emoji="潰れて" />しまいます。
+
+とはいえ、これだけの<Moji emoji="数" />を手で選ぶのは<Moji emoji="正直" /><Moji emoji="面倒" />です。どの<Moji emoji="語" />を<Moji emoji="画像" />にするかは <Moji emoji="AI" /> に<Moji emoji="任せ" />れば、書く<Moji emoji="手間" />はほとんど<Moji emoji="消え" />ます。
+
+## もうひとつの入り口
+
+ここまでは、このブログの中で `<Moji>` を書く<Moji emoji="話" />でした。これとは別に、書くこと<Moji emoji="自体" />を<Moji emoji="任せる" /><Moji emoji="道" />もあります。
+
+mojiemoji-plugin は、Claude Code から<Moji emoji="日本語" />の GitHub Markdown を書くときに、<Moji emoji="キー" /><Moji emoji="ワード" />を<Moji emoji="自動" />で<Moji emoji="スタンプ" />に変えてくれる<Moji emoji="プラグ" /><Moji emoji="イン" />です。issue や PR、<Moji emoji="レビュー" />の<Moji emoji="本文" />を書くと、<Moji emoji="ふさわしい" /><Moji emoji="語" />を選んで mojiemoji の<Moji emoji="画像" />を埋め込みます。URL を手で<Moji emoji="組む" /><Moji emoji="必要" />はありません。
+
+このブログは手で置いて<Moji emoji="楽しむ" />。GitHub では plugin に<Moji emoji="任せる" />。<Moji emoji="同じ" /> mojiemoji でも、<Moji emoji="入り口" />が違います。
+
+<Moji emoji="プラグ" /><Moji emoji="イン" />はこちら — [jozobeer/mojiemoji-plugin](https://github.com/jozobeer/mojiemoji-plugin)。
+
+## 速さと、寄り道と
+
+このブログは、<Moji emoji="表示" />の<Moji emoji="速さ" />を<Moji emoji="最優先" />にしています。CSS も、クライアントの JavaScript も、できるだけ<Moji emoji="持ち" />ません。<Moji emoji="動く" /><Moji emoji="文字" />の<Moji emoji="画像" />は、その<Moji emoji="方針" />とは<Moji emoji="逆" />を向いています。
+
+それでも入れたのは、<Moji emoji="速さ" />だけでは出ない<Moji emoji="楽しさ" />があるから。<Moji emoji="全部" />を<Moji emoji="速く" />したうえで、ここだけ少し<Moji emoji="寄り道" />する。そんな <Moji emoji="例外" /> です。
