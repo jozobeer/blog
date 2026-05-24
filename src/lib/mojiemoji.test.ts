@@ -37,6 +37,11 @@ describe('pools', () => {
       expect(COLORS).not.toContain(f);
     }
   });
+  it('excludes the palest 300-level colors', () => {
+    for (const c of ['fca5a5', 'fdba74', 'fde047', '86efac', '93c5fd', 'a5b4fc', 'd8b4fe', 'f9a8d4']) {
+      expect(COLORS).not.toContain(c);
+    }
+  });
 });
 
 describe('triadic', () => {

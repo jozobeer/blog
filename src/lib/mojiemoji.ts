@@ -24,13 +24,13 @@ export const ANIMATIONS = [
   'yoko_scroll', 'yokomoya', 'yurayura', 'zairu', 'zanzo',
 ] as const;
 
-// mojiemoji-github の明るめパレット（Tailwind 300-500）。FORBIDDEN_COLORS(600+) は含めない。
+// mojiemoji-github の明るめパレットから 400–500 のみ採用（淡い 300 は白背景で読めないため除外）。
+// FORBIDDEN_COLORS(600+) は含めない。
 export const COLORS = [
-  'ef4444', 'f87171', 'fca5a5', 'f97316', 'fb923c', 'fdba74', 'f59e0b', 'fbbf24',
-  'facc15', 'fde047', '22c55e', '4ade80', '86efac', '10b981', '34d399', '06b6d4',
-  '22d3ee', '67e8f9', '3b82f6', '60a5fa', '93c5fd', '6366f1', '818cf8', 'a5b4fc',
-  '8b5cf6', 'a78bfa', 'a855f7', 'c084fc', 'd8b4fe', 'ec4899', 'f472b6', 'f9a8d4',
-  '94a3b8',
+  'ef4444', 'f87171', 'f97316', 'fb923c', 'f59e0b', 'fbbf24', 'facc15',
+  '22c55e', '4ade80', '10b981', '34d399', '06b6d4', '22d3ee', '3b82f6',
+  '60a5fa', '6366f1', '818cf8', '8b5cf6', 'a78bfa', 'a855f7', 'c084fc',
+  'ec4899', 'f472b6', '94a3b8',
 ] as const;
 
 // 色相がフレーム毎に回るので outline を落とす（mojiemoji-github COLOR_SHIFTING_ANIMATIONS）
