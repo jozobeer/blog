@@ -1,0 +1,39 @@
+---
+import {
+  resolveParams,
+  buildMojiemojiUrl,
+  nextIndex,
+  type MojiParams,
+} from '../lib/mojiemoji';
+
+interface Props {
+  emoji: string;
+  font?: string;
+  color?: string;
+  animation?: string;
+  speed?: string;
+  size?: number;
+}
+
+const { emoji, font, color, animation, speed, size = 24 } = Astro.props;
+// テキストは prop（属性）で受け取るので Markdown 変換を受けない。
+const word = emoji.trim();
+
+const index = nextIndex();
+
+const overrides: Partial<MojiParams> = { font, color, animation, speed };
+const params = resolveParams(word, index, overrides);
+const src = buildMojiemojiUrl(word, params);
+const imgLegacyAttrs: Record<string, string> = { align: 'absmiddle' };
+---
+{word && (
+  <img
+    src={src}
+    alt={word}
+    width={size}
+    height={size}
+    {...imgLegacyAttrs}
+    loading="lazy"
+    decoding="async"
+  />
+)}
