@@ -372,7 +372,7 @@ git commit -m "feat(mojiemoji): build runtime mojiemoji image URL"
 
 ```astro
 ---
-import { resolveParams, buildMojiemojiUrl, type MojiParams } from '../lib/mojiemoji';
+import { resolveParams, buildMojiemojiUrl, nextIndex, type MojiParams } from '../lib/mojiemoji';
 
 interface Props {
   emoji: string;
@@ -383,15 +383,15 @@ interface Props {
   size?: number;
 }
 
-// ビルド内カウンタ（モジュールスコープ）。レンダリングごとに increment され、
-// 同じ語でも出現位置で見た目が変わる。ビルド内で順序が安定 => 出力は冪等。
-let renderCount = 0;
-
 const { emoji, font, color, animation, speed, size = 24 } = Astro.props;
 // テキストは prop（属性）で受け取るので Markdown 変換を受けない。
 const word = emoji.trim();
 
-const index = renderCount++;
+// 出現位置 index は lib の nextIndex() から取る。
+// 注意: Astro の `---` フロントマターは毎レンダリング再実行されるため、ここに `let count = 0`
+// を置くと毎回リセットされる（＝全 <Moji> が index 0 になり同じ語が位置で変わらない）。
+// カウンタはモジュール状態として保持される lib 側 nextIndex() に置く（commit 19cd52b）。
+const index = nextIndex();
 
 const overrides: Partial<MojiParams> = { font, color, animation, speed };
 const params = resolveParams(word, index, overrides);
