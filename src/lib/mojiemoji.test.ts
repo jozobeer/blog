@@ -8,6 +8,7 @@ import {
   resolveParams,
   buildMojiemojiUrl,
   MOJIEMOJI_BASE,
+  nextIndex,
 } from './mojiemoji';
 
 describe('fnv1a', () => {
@@ -24,6 +25,16 @@ describe('fnv1a', () => {
     expect(Number.isInteger(h)).toBe(true);
     expect(h).toBeGreaterThanOrEqual(0);
     expect(h).toBeLessThanOrEqual(0xffffffff);
+  });
+});
+
+describe('nextIndex', () => {
+  it('returns strictly increasing values across calls', () => {
+    const a = nextIndex();
+    const b = nextIndex();
+    const c = nextIndex();
+    expect(b).toBe(a + 1);
+    expect(c).toBe(b + 1);
   });
 });
 

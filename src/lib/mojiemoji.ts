@@ -75,3 +75,13 @@ export function buildMojiemojiUrl(text: string, params: MojiParams): string {
   if (params.speed) query.set('speed', params.speed);
   return `${MOJIEMOJI_BASE}/${encodeURIComponent(text)}?${query.toString()}`;
 }
+
+let _occurrence = 0;
+
+/**
+ * ビルド内の出現順カウンタ。モジュール状態としてレンダリング間で保持される
+ * （.astro の `---` フロントマターは毎レンダリング再実行されるため、カウンタはここに置く）。
+ */
+export function nextIndex(): number {
+  return _occurrence++;
+}
