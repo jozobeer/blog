@@ -15,7 +15,7 @@ interface Props {
   size?: number;
 }
 
-const { emoji, font, color, animation, speed, size = 24 } = Astro.props;
+const { emoji, font, color, animation, speed, size = 32 } = Astro.props;
 // テキストは prop（属性）で受け取るので Markdown 変換を受けない。
 const word = emoji.trim();
 
