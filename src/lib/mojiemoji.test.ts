@@ -6,6 +6,8 @@ import {
   COLORS,
   deriveParams,
   resolveParams,
+  buildMojiemojiUrl,
+  MOJIEMOJI_BASE,
 } from './mojiemoji';
 
 describe('fnv1a', () => {
@@ -76,5 +78,29 @@ describe('resolveParams', () => {
   it('ignores undefined overrides', () => {
     const p = resolveParams('完成', 0, { color: undefined });
     expect(p.color).toBe(deriveParams('完成', 0).color);
+  });
+});
+
+describe('buildMojiemojiUrl', () => {
+  const params = { font: 'maru-bold', color: '2563eb', animation: 'bane' };
+
+  it('URL-encodes Japanese text into the path', () => {
+    const url = buildMojiemojiUrl('やったー', params);
+    expect(url.startsWith(`${MOJIEMOJI_BASE}/`)).toBe(true);
+    expect(url).toContain(encodeURIComponent('やったー'));
+  });
+
+  it('includes font, color, animation and transparent background', () => {
+    const url = buildMojiemojiUrl('完成', params);
+    expect(url).toContain('font=maru-bold');
+    expect(url).toContain('color=2563eb');
+    expect(url).toContain('animation=bane');
+    expect(url).toContain('background=transparent');
+  });
+
+  it('omits speed when absent and includes it when present', () => {
+    expect(buildMojiemojiUrl('完成', params)).not.toContain('speed=');
+    expect(buildMojiemojiUrl('完成', { ...params, animation: 'kaiten', speed: 'slow' }))
+      .toContain('speed=slow');
   });
 });

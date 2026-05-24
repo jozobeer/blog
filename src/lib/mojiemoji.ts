@@ -62,3 +62,16 @@ export function resolveParams(
   if (merged.animation === 'kaiten' && !merged.speed) merged.speed = 'slow';
   return merged;
 }
+
+export const MOJIEMOJI_BASE = 'https://mojiemoji.jozo.beer/emoji';
+
+/** mojiemoji の <img src> を組み立てる。src 生成はここに閉じる（将来ビルド時化の差し替え点）。 */
+export function buildMojiemojiUrl(text: string, params: MojiParams): string {
+  const query = new URLSearchParams();
+  query.set('font', params.font);
+  query.set('color', params.color);
+  query.set('animation', params.animation);
+  query.set('background', 'transparent');
+  if (params.speed) query.set('speed', params.speed);
+  return `${MOJIEMOJI_BASE}/${encodeURIComponent(text)}?${query.toString()}`;
+}
