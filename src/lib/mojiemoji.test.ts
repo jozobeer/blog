@@ -5,6 +5,7 @@ import {
   ANIMATIONS,
   COLORS,
   deriveParams,
+  resolveParams,
 } from './mojiemoji';
 
 describe('fnv1a', () => {
@@ -52,5 +53,28 @@ describe('deriveParams', () => {
         expect(p.speed).toBe('slow');
       }
     }
+  });
+});
+
+describe('resolveParams', () => {
+  it('falls back to derived params when no overrides', () => {
+    expect(resolveParams('完成', 0)).toEqual(deriveParams('完成', 0));
+  });
+
+  it('lets explicit overrides win', () => {
+    const p = resolveParams('完成', 0, { color: 'ffffff', font: 'pixel' });
+    expect(p.color).toBe('ffffff');
+    expect(p.font).toBe('pixel');
+    expect(p.animation).toBe(deriveParams('完成', 0).animation);
+  });
+
+  it('forces speed=slow when animation is overridden to kaiten without speed', () => {
+    const p = resolveParams('x', 0, { animation: 'kaiten' });
+    expect(p.speed).toBe('slow');
+  });
+
+  it('ignores undefined overrides', () => {
+    const p = resolveParams('完成', 0, { color: undefined });
+    expect(p.color).toBe(deriveParams('完成', 0).color);
   });
 });

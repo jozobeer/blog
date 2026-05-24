@@ -46,3 +46,19 @@ export function deriveParams(text: string, index: number): MojiParams {
   if (animation === 'kaiten') params.speed = 'slow'; // 回転は遅くしないと読めない
   return params;
 }
+
+/** 導出値に明示 override をマージする。undefined は無視。kaiten は speed=slow を保証。 */
+export function resolveParams(
+  text: string,
+  index: number,
+  overrides: Partial<MojiParams> = {},
+): MojiParams {
+  const base = deriveParams(text, index);
+  const merged: MojiParams = { ...base };
+  for (const key of ['font', 'color', 'animation', 'speed'] as const) {
+    const value = overrides[key];
+    if (value !== undefined) merged[key] = value;
+  }
+  if (merged.animation === 'kaiten' && !merged.speed) merged.speed = 'slow';
+  return merged;
+}
