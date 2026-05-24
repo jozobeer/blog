@@ -11,7 +11,7 @@ type Props = CollectionEntry<'blog'>['data'];
 const { title, description, pubDate, updatedDate, heroImage, author } = Astro.props;
 ---
 
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 	<head>
 		<BaseHead title={title} description={description} image={heroImage} />
 	</head>
