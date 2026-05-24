@@ -15,7 +15,7 @@
 
 > **実装後の更新（2026-05-25）:** ユーザー決定により装飾方針を **`mojiemoji-github` に完全一致**させた
 > （triadic outline ＝ 色相+120°、明るめパレット＝`FORBIDDEN_COLORS` 600+ 不使用、animation プール ＝ 正準 34 − `{bakusan, chuuou_zoom}`、
-> color-shifting `{kira,disco,psycho}` は outline 除外、rotational `{kaiten,kage_kaiten}` は `speed=slow`、inline 既定 height=20）。
+> color-shifting `{kira,disco,psycho}` は outline 除外、rotational `{kaiten,kage_kaiten}` は `speed=slow`、inline 既定 height=24）。
 > 下記 Task 3–5 の lib コードは初版（簡略パレット・outline なし）。**最新の正本は `src/lib/mojiemoji.ts`（commit `99a7fe2`）と spec §6**。
 
 ---
