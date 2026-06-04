@@ -1,27 +1,27 @@
 ---
 title: "GitHub 自身に画像を置く道具を作りました"
-description: "GitHub に画像を置きたい、でも第三者公開ホストには上げたくない。repo の可視性に従う user-attachments に、ログイン済みブラウザを借りてドロップする小さな道具 gh img の設計を、三つの引き算で書きました。"
+description: "GitHub に画像を置きたい、でも第三者公開ホストには上げたくない。repo の可視性に従う user-attachments に、ログイン済みブラウザを借りてドロップする小さな道具 gh img を作りました。三つの引き算という設計と、再現に要るコード（スクリプト全文・設定ファイル・導入手順）を全部置きます。"
 pubDate: 'Jun 04 2026'
 author: jozo
 ---
 
-GitHub のコメントやレビュー本文に、画像を一枚置きたいときがあります。スクリーンショット、図、生成した一枚。`<img>` で貼れさえすればいいので、まずはどこかに画像を置いて URL を得る必要があります。
+GitHub の<Moji emoji="コメント" />や<Moji emoji="レビュー" />本文に、<Moji emoji="画像" />を一枚置きたいときがあります。<Moji emoji="スクショ" />、<Moji emoji="図" />、<Moji emoji="生成" />した一枚。`<img>` で<Moji emoji="貼れ" />さえすればいいので、まずはどこかに<Moji emoji="画像" />を置いて URL を<Moji emoji="得る" />必要があります。
 
-ここで、ひとつだけ譲れない線がありました。imgur のような第三者の公開ホストには、絶対に上げたくない。一度公開ホストに乗った画像は、消しても消えません。インデックスされ、キャッシュされ、手元から取り消せなくなる。だから「どこに置くか」を、URL を取りに行く前に決めておきたかった。
+ここで、ひとつだけ<Moji emoji="譲れ" />ない<Moji emoji="線" />がありました。imgur のような<Moji emoji="第三者" />の<Moji emoji="公開" /><Moji emoji="ホスト" />には、<Moji emoji="絶対" />に上げたくない。一度<Moji emoji="公開" /><Moji emoji="ホスト" />に乗った<Moji emoji="画像" />は、<Moji emoji="消し" />ても<Moji emoji="消え" />ません。<Moji emoji="索引" />され、<Moji emoji="キャッシュ" />され、<Moji emoji="手元" />から<Moji emoji="取り消せ" />なくなる。だから「どこに置くか」を、URL を<Moji emoji="取り" />に行く前に<Moji emoji="決め" />ておきたかった。
 
 ## いちばんきれいな置き場所は、GitHub 自身だった
 
-調べてみて腑に落ちたのは、GitHub には自前の添付ストレージがある、という一点でした。コメント欄に画像をドロップすると挿し込まれる、あの `https://github.com/user-attachments/assets/...` です。
+<Moji emoji="調べ" />てみて<Moji emoji="腑に落ち" />たのは、GitHub には<Moji emoji="自前" />の<Moji emoji="添付" /><Moji emoji="ストア" />がある、という一点でした。<Moji emoji="コメント" />欄に<Moji emoji="画像" />を<Moji emoji="ドロップ" />すると<Moji emoji="挿し込ま" />れる、あの `https://github.com/user-attachments/assets/...` です。
 
-これが心地よいのは、その画像が **repo の可視性に従う** からです。private repo の issue や PR に貼った添付は、その repo を見られる人にしか見えません。実際、ログインしていない状態で private repo の添付 URL を叩くと 404 が返ります。つまり user-attachments は、第三者の公開ホストではない。GitHub という、もともとそのコンテンツが置かれている場所の中に、置いたものが収まるだけ。譲れなかった線を、いちばん自然にまたぐ置き場所でした。
+これが<Moji emoji="心地よい" />のは、その<Moji emoji="画像" />が **repo の<Moji emoji="可視性" />に従う** からです。private repo の issue や PR に<Moji emoji="貼っ" />た<Moji emoji="添付" />は、その repo を<Moji emoji="見られる" /><Moji emoji="人" />にしか<Moji emoji="見え" />ません。実際、<Moji emoji="ログイン" />していない<Moji emoji="状態" />で private repo の<Moji emoji="添付" /> URL を<Moji emoji="叩く" />と 404 が<Moji emoji="返り" />ます。つまり user-attachments は、<Moji emoji="第三者" />の<Moji emoji="公開" /><Moji emoji="ホスト" />ではない。GitHub という、もともとその<Moji emoji="中身" />が<Moji emoji="置か" />れている<Moji emoji="場所" />の中に、置いたものが<Moji emoji="収まる" />だけ。<Moji emoji="譲れ" />なかった<Moji emoji="線" />を、いちばん<Moji emoji="自然" />に<Moji emoji="またぐ" />置き場所でした。
 
-問題は、ここに置くための公式 API が見当たらないことでした。アップロードの実体は `POST /upload/policies/assets` というエンドポイントなのですが、これは web の UI 専用で、Personal Access Token を付けて叩くと 422 が返ってきます。`user_session` の cookie と CSRF トークンが要る。手元の `gh api` からは、素直には届きません。
+<Moji emoji="問題" />は、ここに置くための<Moji emoji="公式" /> API が<Moji emoji="見当たら" />ないことでした。<Moji emoji="アップ" />の<Moji emoji="実体" />は `POST /upload/policies/assets` という<Moji emoji="経路" />なのですが、これは web の UI <Moji emoji="専用" />で、Personal Access Token を<Moji emoji="付け" />て<Moji emoji="叩く" />と 422 が<Moji emoji="返っ" />てきます。`user_session` の cookie と CSRF <Moji emoji="トークン" />が<Moji emoji="要る" />。<Moji emoji="手元" />の `gh api` からは、<Moji emoji="素直" />には<Moji emoji="届き" />ません。
 
 ## なら、ログイン済みのブラウザに置いてもらう
 
-API が無いなら、UI にやってもらえばいい。すでに GitHub にログインしているブラウザを一つ用意して、そのコメント欄に画像をドロップさせる。GitHub がアップロードを済ませて URL を挿し込んでくれたら、その URL だけ読み取って、**コメントは送らずに帰る**。
+API が<Moji emoji="無い" />なら、UI に<Moji emoji="やって" />もらえばいい。すでに GitHub に<Moji emoji="ログイン" />している<Moji emoji="ブラウザ" />を一つ<Moji emoji="用意" />して、その<Moji emoji="コメント" />欄に<Moji emoji="画像" />を<Moji emoji="ドロップ" />させる。GitHub が<Moji emoji="アップ" />を<Moji emoji="済ませ" />て URL を<Moji emoji="挿し込ん" />でくれたら、その URL だけ<Moji emoji="読み取っ" />て、**<Moji emoji="コメント" />は<Moji emoji="送ら" />ずに<Moji emoji="帰る" />**。
 
-それだけをする小さな道具を `gh img` という名前で `gh` のエイリアスに置きました。中身は、[playwright-cli](https://formulae.brew.sh/formula/playwright-cli) で headless の Chromium を一つ起動して、ページを開き、コメント欄を見つけ、画像をドロップし、挿し込まれた URL を拾って閉じる、というだけのシェルスクリプトです。
+それだけをする<Moji emoji="小さな" /><Moji emoji="道具" />を `gh img` という<Moji emoji="名前" />で `gh` の<Moji emoji="エイリアス" />に置きました。<Moji emoji="中身" />は、[playwright-cli](https://formulae.brew.sh/formula/playwright-cli) で headless の Chromium を一つ<Moji emoji="起動" />して、<Moji emoji="ページ" />を<Moji emoji="開き" />、<Moji emoji="コメント" />欄を<Moji emoji="見つけ" />、<Moji emoji="画像" />を<Moji emoji="ドロップ" />し、<Moji emoji="挿し込ま" />れた URL を<Moji emoji="拾っ" />て<Moji emoji="閉じる" />、というだけの<Moji emoji="シェル" /><Moji emoji="スクリプト" />です。
 
 ```bash
 # 一度だけ、対話的にログイン（headed なブラウザが開く）
@@ -32,17 +32,17 @@ gh img ./shot.png https://github.com/owner/repo/issues/123
 gh img ./shot.png owner/repo   # その repo の新規 issue 作成画面で代用
 ```
 
-これは前に書いた [もじえもじ](https://blog.jozo.beer/blog/mojiemoji/) と地続きの話でもあります。あちらは「GitHub に動く文字を置く」道具で、絵文字が主役でした。こちらは「GitHub に画像を置く」道具で、ファイルが主役です。置きたいものが違うだけで、向いている方向は同じでした。
+これは前に書いた [もじえもじ](https://blog.jozo.beer/blog/mojiemoji/) と<Moji emoji="地続き" />の<Moji emoji="話" />でもあります。あちらは「GitHub に<Moji emoji="動く" /><Moji emoji="文字" />を置く」<Moji emoji="道具" />で、<Moji emoji="絵文字" />が<Moji emoji="主役" />でした。こちらは「GitHub に<Moji emoji="画像" />を置く」<Moji emoji="道具" />で、<Moji emoji="ファイル" />が<Moji emoji="主役" />です。置きたいものが<Moji emoji="違う" />だけで、<Moji emoji="向い" />ている<Moji emoji="方向" />は<Moji emoji="同じ" />でした。
 
 ## 主役は、引き算の三つ
 
-書いてみて分かったのは、この道具の難しさは「どう動かすか」ではなく「**借りたブラウザの手を、どう綺麗に扱うか**」にある、という一点でした。ログイン済みのセッションは、それ自体がアカウントとほぼ等価な機密です。その手を借りる以上、足し算ではなく、要らないものを引いておくほうが効きます。手元では、三つ引きました。
+<Moji emoji="書い" />てみて<Moji emoji="分かっ" />たのは、この<Moji emoji="道具" />の<Moji emoji="難しさ" />は「どう<Moji emoji="動かす" />か」ではなく「**<Moji emoji="借り" />た<Moji emoji="ブラウザ" />の<Moji emoji="手" />を、どう<Moji emoji="綺麗" />に<Moji emoji="扱う" />か**」にある、という一点でした。<Moji emoji="ログイン" />済みの<Moji emoji="セッション" />は、それ自体が<Moji emoji="アカウント" />とほぼ<Moji emoji="等価" />な<Moji emoji="機密" />です。その<Moji emoji="手" />を<Moji emoji="借りる" />以上、<Moji emoji="足し算" />ではなく、<Moji emoji="要ら" />ないものを<Moji emoji="引い" />ておくほうが<Moji emoji="効き" />ます。<Moji emoji="手元" />では、三つ<Moji emoji="引き" />ました。
 
 ### 一つめ。<Moji emoji="防壁" />は一行に絞る
 
-画像は、ロードされたページのコメント欄に無条件でドロップされます。ログイン確認も、ページが制御している `meta[name=user-login]` を読むだけ。つまり、開いてしまったページがもし悪意あるものなら、確認をすり抜けてローカルファイルがそのページに渡りうる。
+<Moji emoji="画像" />は、<Moji emoji="ロード" />された<Moji emoji="ページ" />の<Moji emoji="コメント" />欄に<Moji emoji="無条件" />で<Moji emoji="ドロップ" />されます。<Moji emoji="ログイン" /><Moji emoji="確認" />も、<Moji emoji="ページ" />が<Moji emoji="制御" />している `meta[name=user-login]` を<Moji emoji="読む" />だけ。つまり、<Moji emoji="開い" />てしまった<Moji emoji="ページ" />がもし<Moji emoji="悪意" />あるものなら、<Moji emoji="確認" />を<Moji emoji="すり抜け" />て<Moji emoji="ローカル" /><Moji emoji="ファイル" />がその<Moji emoji="ページ" />に<Moji emoji="渡り" />うる。
 
-だから防壁は一箇所しか置けません。ページを **開く前** に、行き先のホストを検証すること。
+だから<Moji emoji="防壁" />は一箇所しか置けません。<Moji emoji="ページ" />を **<Moji emoji="開く" />前** に、<Moji emoji="行き先" />の<Moji emoji="ホスト" />を<Moji emoji="検証" />すること。
 
 ```bash
 case "$target" in
@@ -53,11 +53,11 @@ case "$target" in
 esac
 ```
 
-効いているのは、受理パターンの末尾にある一本のスラッシュでした。`https://github.com/` まで含めて一致を見ると、`github.com.evil.com` や `github.com@evil.com` のような見た目の似たホストが弾かれます。ドロップ自体はファイルアクセス制限の管轄外なので、ここで一行ぶん丁寧にホストを見ることが、唯一の守りになります。足せる防壁は他にいくらでも思いつきますが、要るのはこの一行でした。
+<Moji emoji="効い" />ているのは、<Moji emoji="受理" /><Moji emoji="パターン" />の<Moji emoji="末尾" />にある一本の<Moji emoji="スラッシュ" />でした。`https://github.com/` まで<Moji emoji="含め" />て<Moji emoji="一致" />を<Moji emoji="見る" />と、`github.com.evil.com` や `github.com@evil.com` のような<Moji emoji="見た目" />の<Moji emoji="似た" /><Moji emoji="ホスト" />が<Moji emoji="弾か" />れます。<Moji emoji="ドロップ" />自体は<Moji emoji="ファイル" /><Moji emoji="アクセス" /><Moji emoji="制限" />の<Moji emoji="管轄外" />なので、ここで一行ぶん<Moji emoji="丁寧" />に<Moji emoji="ホスト" />を<Moji emoji="見る" />ことが、<Moji emoji="唯一" />の<Moji emoji="守り" />になります。<Moji emoji="足せる" /><Moji emoji="防壁" />は<Moji emoji="他" />にいくらでも<Moji emoji="思いつき" />ますが、<Moji emoji="要る" />のはこの一行でした。
 
 ### 二つめ。<Moji emoji="機密" />は、XDG の正しい棚へ
 
-借りたセッションの cookie は、どこに置くかで意味が変わります。[XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) の棚分けに沿って、種類ごとに置き場所を分けました。
+<Moji emoji="借り" />た<Moji emoji="セッション" />の cookie は、どこに置くかで<Moji emoji="意味" />が<Moji emoji="変わり" />ます。[XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) の<Moji emoji="棚分け" />に<Moji emoji="沿っ" />て、<Moji emoji="種類" />ごとに<Moji emoji="置き場所" />を<Moji emoji="分け" />ました。
 
 | 置くもの | 棚 | 権限 |
 |---|---|---|
@@ -65,33 +65,32 @@ esac
 | ブラウザ選択の設定 | `$XDG_CONFIG_HOME/playwright-cli/cli.config.json` | `0600` |
 | 一時的なスナップショット置き場 | `$XDG_CACHE_HOME/gh-img` | — |
 
-機密は state、設定は config、使い捨ては cache。これは仕様に沿った普遍則です。
+<Moji emoji="機密" />は state、<Moji emoji="設定" />は config、<Moji emoji="使い捨て" />は cache。これは<Moji emoji="仕様" />に<Moji emoji="沿っ" />た<Moji emoji="普遍則" />です。
 
-その上で、もう一段だけ手元で足した固有則がありました。cookie profile のパスを **cwd に依存させず固定する** ことです。これは playwright の都合に見えますが、「借りたセッションの保管場所を、実行する場所から切り離しておく」という、もう少し広い一般則の一例でもありました。
+その上で、もう一段だけ<Moji emoji="手元" />で<Moji emoji="足し" />た<Moji emoji="固有則" />がありました。cookie profile の<Moji emoji="パス" />を **cwd に<Moji emoji="依存" />させず<Moji emoji="固定" />する** ことです。これは playwright の<Moji emoji="都合" />に<Moji emoji="見え" />ますが、「<Moji emoji="借り" />た<Moji emoji="セッション" />の<Moji emoji="保管" /><Moji emoji="場所" />を、<Moji emoji="実行" />する<Moji emoji="場所" />から<Moji emoji="切り離し" />ておく」という、もう少し<Moji emoji="広い" /><Moji emoji="一般則" />の一例でもありました。
 
 ```bash
 export PLAYWRIGHT_MCP_USER_DATA_DIR="${PLAYWRIGHT_MCP_USER_DATA_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gh-img/userdata}"
 ```
 
-playwright は persistent profile を、起動した作業ディレクトリのハッシュでキーにします。固定しないと、あるディレクトリで済ませたログインが、スクリプトが scratch ディレクトリに移って動くときには見えなくなる。一度動かして、ログインしたはずなのに「ログインしていない」と言われて、ようやく腑に落ちた挙動でした。固定したパスは、cwd がどこであっても同じ棚を指します。
+playwright は persistent profile を、<Moji emoji="起動" />した<Moji emoji="作業" /><Moji emoji="ディレクトリ" />の<Moji emoji="ハッシュ" />で<Moji emoji="キー" />にします。<Moji emoji="固定" />しないと、ある<Moji emoji="ディレクトリ" />で<Moji emoji="済ませ" />た<Moji emoji="ログイン" />が、<Moji emoji="スクリプト" />が scratch <Moji emoji="ディレクトリ" />に<Moji emoji="移っ" />て<Moji emoji="動く" />ときには<Moji emoji="見え" />なくなる。一度<Moji emoji="動かし" />て、<Moji emoji="ログイン" />したはずなのに「<Moji emoji="ログイン" />していない」と<Moji emoji="言わ" />れて、ようやく<Moji emoji="腑に落ち" />た<Moji emoji="挙動" />でした。<Moji emoji="固定" />した<Moji emoji="パス" />は、cwd がどこであっても<Moji emoji="同じ" /><Moji emoji="棚" />を<Moji emoji="指し" />ます。
 
 ### 三つめ。送らずに帰る、という<Moji emoji="抑制" />
 
-これがいちばん地味で、いちばん要る引き算でした。URL を読み取ったら、コメント欄に書きかけた下書きを破棄して、ブラウザを閉じる。何も投稿しない。道具は URL を取りに来ただけだからです。
+これがいちばん<Moji emoji="地味" />で、いちばん<Moji emoji="要る" /><Moji emoji="引き算" />でした。URL を<Moji emoji="読み取っ" />たら、<Moji emoji="コメント" />欄に<Moji emoji="書きかけ" />た<Moji emoji="下書き" />を<Moji emoji="破棄" />して、<Moji emoji="ブラウザ" />を<Moji emoji="閉じる" />。<Moji emoji="何も" /><Moji emoji="投稿" />しない。<Moji emoji="道具" />は URL を<Moji emoji="取り" />に来ただけだからです。
 
 ```bash
 cleanup() { pw close >/dev/null 2>&1; rm -rf "$scratch/.playwright-cli"; }
 trap cleanup EXIT INT TERM
 ```
 
-`trap` を `EXIT` `INT` `TERM` のどれにも掛けてあるので、ポーリングの途中で Ctrl-C を押しても、ブラウザのデーモンだけは閉じます。閉じるのはブラウザで、cookie profile は残す。次に呼んだときに、また `--login` させずに済むようにです。「閉じるけれど消さない」「読むけれど送らない」。借りた手を返すときの作法は、結局この抑制に尽きていました。
+`trap` を `EXIT` `INT` `TERM` のどれにも<Moji emoji="掛け" />てあるので、<Moji emoji="ポーリング" />の<Moji emoji="途中" />で Ctrl-C を<Moji emoji="押し" />ても、<Moji emoji="ブラウザ" />の<Moji emoji="デーモン" />だけは<Moji emoji="閉じ" />ます。<Moji emoji="閉じる" />のは<Moji emoji="ブラウザ" />で、cookie profile は<Moji emoji="残す" />。次に<Moji emoji="呼ん" />だときに、また `--login` させずに<Moji emoji="済む" />ようにです。「<Moji emoji="閉じる" />けれど<Moji emoji="消さ" />ない」「<Moji emoji="読む" />けれど<Moji emoji="送ら" />ない」。<Moji emoji="借り" />た<Moji emoji="手" />を<Moji emoji="返す" />ときの<Moji emoji="作法" />は、<Moji emoji="結局" />この<Moji emoji="抑制" />に<Moji emoji="尽き" />ていました。
 
 ## 道具はこれで全部
 
-引いていったら、残ったのはこの一枚でした。借りた手を綺麗に返すための仕掛けは、結局このスクリプトに収まります。`~/.config/gh/bin/gh-img` に置いて、`gh` の config から `img` という名前で呼んでいるだけです。パスはすべて `$HOME` と `$XDG_*` で書いてあるので、別の機械にそのまま持っていっても動きます。
+<Moji emoji="引い" />ていったら、<Moji emoji="残っ" />たのはこの一枚でした。<Moji emoji="借り" />た<Moji emoji="手" />を<Moji emoji="綺麗" />に<Moji emoji="返す" />ための<Moji emoji="仕掛け" />は、<Moji emoji="結局" />この<Moji emoji="スクリプト" />に<Moji emoji="収まり" />ます。`~/.config/gh/bin/gh-img` に置いて、`gh` の config から `img` という<Moji emoji="名前" />で<Moji emoji="呼ん" />でいるだけです。<Moji emoji="パス" />はすべて `$HOME` と `$XDG_*` で<Moji emoji="書い" />てあるので、<Moji emoji="別" />の<Moji emoji="機械" />にそのまま<Moji emoji="持っ" />ていっても<Moji emoji="動き" />ます。
 
-<details>
-<summary>gh-img スクリプト全文（180 行）</summary>
+<Moji emoji="設計" />の<Moji emoji="話" />をするなら、<Moji emoji="本当" />は<Moji emoji="全文" />こそ<Moji emoji="宝" />です。さっきの三つの<Moji emoji="引き算" />は、この一枚のどこに<Moji emoji="効い" />ているか。<Moji emoji="畳ん" />でしまうと、<Moji emoji="読者" />が<Moji emoji="手元" />で<Moji emoji="同じ" /><Moji emoji="環境" />を<Moji emoji="起こす" />ための<Moji emoji="起点" />が<Moji emoji="消え" />ます。だから<Moji emoji="折りたた" />まず、ここにそのまま置きます。180 <Moji emoji="行" />、<Moji emoji="コピペ" />でそのまま<Moji emoji="動く" /><Moji emoji="一枚" />です。
 
 ```bash
 #!/usr/bin/env bash
@@ -276,23 +275,96 @@ pw --raw eval "() => { const t = $finder; if (t) { const s = Object.getOwnProper
 printf '%s\n' "$url"
 ```
 
-</details>
+三つの<Moji emoji="引き算" />は、この一枚に<Moji emoji="散ら" />ばっています。<Moji emoji="一つめ" />の<Moji emoji="ホスト" /><Moji emoji="検証" />は `case "$target" in` の<Moji emoji="ブロック" />。<Moji emoji="二つめ" />の<Moji emoji="機密" />の<Moji emoji="置き場所" />は<Moji emoji="冒頭" />の `export PLAYWRIGHT_*` <Moji emoji="三行" />。<Moji emoji="三つめ" />の<Moji emoji="送ら" />ずに<Moji emoji="帰る" />は、<Moji emoji="末尾" />の `cleanup` と<Moji emoji="下書き" /><Moji emoji="破棄" />の処理です。<Moji emoji="残り" />は、<Moji emoji="コメント" />欄が<Moji emoji="二種類" />ある<Moji emoji="都合" />を<Moji emoji="吸収" />する finder と、React の<Moji emoji="ハイドレート" />を<Moji emoji="待つ" /><Moji emoji="リトライ" />です。
 
-`gh` 側は、config の `aliases` に一行足すだけです。
+## ブラウザの選び方だけは、設定ファイルが要る
+
+<Moji emoji="一つ" />だけ、<Moji emoji="環境" /><Moji emoji="変数" />では<Moji emoji="効か" />ない<Moji emoji="設定" />があります。<Moji emoji="ブラウザ" />の<Moji emoji="種類" />の<Moji emoji="選び方" />です。`channel: "chromium"` を<Moji emoji="設定" /><Moji emoji="ファイル" />で<Moji emoji="渡す" />と、persistent な<Moji emoji="ログイン" /><Moji emoji="プロファイル" />をそのまま<Moji emoji="使い" />ます。ところが `PLAYWRIGHT_MCP_BROWSER=chromium` という<Moji emoji="環境" /><Moji emoji="変数" />で<Moji emoji="渡す" />と、chrome-for-testing に<Moji emoji="解決" />され、**<Moji emoji="別" />の cookie store** を<Moji emoji="掴ん" />で、<Moji emoji="ログイン" />が<Moji emoji="静か" />に<Moji emoji="落ち" />ます。だからこの一点だけは、<Moji emoji="設定" /><Moji emoji="ファイル" />でなければ<Moji emoji="効き" />ません。
+
+<Moji emoji="幸い" />、<Moji emoji="スクリプト" />の `ensure_config` が、<Moji emoji="無けれ" />ば<Moji emoji="最小" />の<Moji emoji="設定" />を<Moji emoji="自動" />で<Moji emoji="書き" />ます。だから<Moji emoji="厳密" />には、<Moji emoji="手" />で<Moji emoji="置か" />なくても<Moji emoji="動き" />ます。とはいえ<Moji emoji="手元" />では、viewport や timeouts も<Moji emoji="効か" />せたかったので、<Moji emoji="少し" /><Moji emoji="厚め" />のものを `~/.config/playwright-cli/cli.config.json` に置いています。<Moji emoji="効い" />ている<Moji emoji="一行" />は、やはり `channel: "chromium"` です。
+
+```json
+{
+  "$schema": "./cli.config.schema.json",
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "channel": "chromium",
+      "headless": true
+    },
+    "contextOptions": {
+      "viewport": { "width": 1280, "height": 800 }
+    }
+  },
+  "timeouts": {
+    "action": 10000,
+    "navigation": 60000
+  }
+}
+```
+
+## 手元に置くまでの手順
+
+<Moji emoji="再現" />に<Moji emoji="要る" />ものは、<Moji emoji="道具" />一つと<Moji emoji="設定" />一つ、そして<Moji emoji="エイリアス" />一行です。<Moji emoji="順番" />に<Moji emoji="置い" />ていけば、<Moji emoji="手元" />で<Moji emoji="同じ" /><Moji emoji="環境" />が<Moji emoji="立ち上がり" />ます。
+
+まず playwright-cli を<Moji emoji="入れ" />ます。
+
+```bash
+brew install playwright-cli
+```
+
+<Moji emoji="次" />に、<Moji emoji="上" />の<Moji emoji="スクリプト" />全文を `~/.config/gh/bin/gh-img` に<Moji emoji="置い" />て、<Moji emoji="実行" /><Moji emoji="権限" />を<Moji emoji="付け" />ます。
+
+```bash
+mkdir -p ~/.config/gh/bin
+# （上のスクリプト全文を ~/.config/gh/bin/gh-img に保存してから）
+chmod +x ~/.config/gh/bin/gh-img
+```
+
+<Moji emoji="設定" /><Moji emoji="ファイル" />は、<Moji emoji="さっき" />の json を `~/.config/playwright-cli/cli.config.json` に<Moji emoji="置き" />ます。<Moji emoji="置か" />なくても `ensure_config` が<Moji emoji="最小" />版を<Moji emoji="書い" />てくれますが、viewport まで<Moji emoji="効か" />せたいなら<Moji emoji="手" />で<Moji emoji="置く" />ほうが<Moji emoji="早い" />です。
+
+```bash
+mkdir -p ~/.config/playwright-cli
+# （上の cli.config.json を ~/.config/playwright-cli/cli.config.json に保存）
+```
+
+<Moji emoji="道具" />を `gh img` という<Moji emoji="名前" />で<Moji emoji="呼べ" />るように、`gh` の config に<Moji emoji="エイリアス" />を一行<Moji emoji="足し" />ます。`~/.config/gh/config.yml` の `aliases:` の<Moji emoji="下" />に、こう書きます。
 
 ```yaml
 aliases:
     img: '!~/.config/gh/bin/gh-img "$@"'
 ```
 
-これで手元に道具が渡ります。あとは `gh img --login` を一度だけ済ませれば、以後は URL が返ってくるだけ。
+<Moji emoji="最後" />に、一度だけ<Moji emoji="対話" />的に<Moji emoji="ログイン" />します。headed な<Moji emoji="ブラウザ" />が<Moji emoji="開く" />ので、GitHub に<Moji emoji="ログイン" />（2FA も）して、<Moji emoji="ターミナル" />で Enter を<Moji emoji="押す" />だけです。
+
+```bash
+gh img --login
+```
+
+これで<Moji emoji="準備" />は<Moji emoji="完了" />です。<Moji emoji="以後" />の<Moji emoji="使い方" />は、<Moji emoji="画像" />と<Moji emoji="行き先" />を<Moji emoji="渡す" />だけ。
+
+```bash
+gh img <画像のパス> <issue または PR の URL>
+gh img ./shot.png owner/repo   # その repo の新規 issue 作成画面で代用
+```
+
+<Moji emoji="転ん" />だときのために、<Moji emoji="終了" /><Moji emoji="コード" />も<Moji emoji="意味" />を<Moji emoji="持た" />せてあります。`die` の<Moji emoji="第二" /><Moji emoji="引数" />がそのまま exit code です。
+
+| code | 意味 |
+|---|---|
+| `2` | 引数不正・ファイル無し・github.com 以外のホスト |
+| `3` | 未ログイン（またはセッション切れ）→ `gh img --login` |
+| `4` | そのページにコメント欄が見つからない |
+| `5` | コメント欄へのドロップに失敗 |
+| `6` | user-attachments の URL が返らなかった（タイムアウト等） |
+| `127` | playwright-cli が見つからない（`brew install playwright-cli`） |
 
 ## やってみて分かったこと
 
-実装には、まだ細かいつまみがあります。コメント欄が二種類あって、新規 issue の React エディタと、会話ページの古い `id="new_comment_field"` のどちらにも当たる finder を書く必要があったり。ブラウザの種類を環境変数ではなく設定ファイルで掴まないと、別の cookie store に逃げてログインが消えたり。そういう手触りは、ドキュメントを読むだけでは見えてこなくて、一度動かして転んでから分かりました。
+<Moji emoji="実装" />には、まだ<Moji emoji="細かい" /><Moji emoji="つまみ" />があります。<Moji emoji="コメント" />欄が<Moji emoji="二種類" />あって、<Moji emoji="新規" /> issue の React <Moji emoji="エディタ" />と、<Moji emoji="会話" /><Moji emoji="ページ" />の<Moji emoji="古い" /> `id="new_comment_field"` のどちらにも<Moji emoji="当たる" /> finder を<Moji emoji="書く" /><Moji emoji="必要" />があったり。<Moji emoji="ブラウザ" />の<Moji emoji="種類" />を<Moji emoji="環境" /><Moji emoji="変数" />ではなく<Moji emoji="設定" /><Moji emoji="ファイル" />で<Moji emoji="掴ま" />ないと、<Moji emoji="別" />の cookie store に<Moji emoji="逃げ" />て<Moji emoji="ログイン" />が<Moji emoji="消え" />たり。そういう<Moji emoji="手触り" />は、<Moji emoji="ドキュメント" />を<Moji emoji="読む" />だけでは<Moji emoji="見え" />てこなくて、一度<Moji emoji="動かし" />て<Moji emoji="転ん" />でから<Moji emoji="分かり" />ました。
 
-ただ、振り返って残るのは、機能の話ではありませんでした。動かしてみて分かったのは、ログイン済みのブラウザを借りる道具は、足すことよりも引くことで形が決まる、という一点だった気がします。ホストを見る一行。機密を正しい棚に置くこと。読んだら送らずに帰ること。この三つを引いておけば、借りた手は綺麗に返せる。
+ただ、<Moji emoji="振り返っ" />て<Moji emoji="残る" />のは、<Moji emoji="機能" />の<Moji emoji="話" />ではありませんでした。<Moji emoji="動かし" />てみて<Moji emoji="分かっ" />たのは、<Moji emoji="ログイン" />済みの<Moji emoji="ブラウザ" />を<Moji emoji="借りる" /><Moji emoji="道具" />は、<Moji emoji="足す" />ことよりも<Moji emoji="引く" />ことで<Moji emoji="形" />が<Moji emoji="決まる" />、という一点だった<Moji emoji="気" />がします。<Moji emoji="ホスト" />を<Moji emoji="見る" />一行。<Moji emoji="機密" />を<Moji emoji="正しい" /><Moji emoji="棚" />に<Moji emoji="置く" />こと。<Moji emoji="読ん" />だら<Moji emoji="送ら" />ずに<Moji emoji="帰る" />こと。この三つを<Moji emoji="引い" />ておけば、<Moji emoji="借り" />た<Moji emoji="手" />は<Moji emoji="綺麗" />に<Moji emoji="返せ" />る。
 
-とはいえ、これは `gh img` という一つの道具で手元がそう見えた、というだけのことです。借りたセッションをどう扱うかは、扱うものによって線の引き場所も変わるはず。同じパターンを別の道具に転がすときは、自分の手元でもう一度、いちばん小さい形から確かめてみてもいいかもしれません。
+とはいえ、これは `gh img` という一つの<Moji emoji="道具" />で<Moji emoji="手元" />がそう<Moji emoji="見え" />た、というだけのことです。<Moji emoji="借り" />た<Moji emoji="セッション" />をどう<Moji emoji="扱う" />かは、<Moji emoji="扱う" />ものによって<Moji emoji="線" />の<Moji emoji="引き場所" />も<Moji emoji="変わる" />はず。<Moji emoji="同じ" /><Moji emoji="パターン" />を<Moji emoji="別" />の<Moji emoji="道具" />に<Moji emoji="転がす" />ときは、<Moji emoji="自分" />の<Moji emoji="手元" />でもう一度、いちばん<Moji emoji="小さい" /><Moji emoji="形" />から<Moji emoji="確かめ" />てみてもいいかもしれません。
 
-ちなみにこのブログ自身、[CSS とクライアント側の JavaScript を原則持たない](https://blog.jozo.beer/blog/hello/)という引き算で立っています。道具の設計も、文章の置き場所も、要らないものを先に引いておくと、残ったものの輪郭がはっきりする。手元では、そんなふうに見えました。
+ちなみにこのブログ自身、[CSS とクライアント側の JavaScript を原則持たない](https://blog.jozo.beer/blog/hello/)という<Moji emoji="引き算" />で<Moji emoji="立っ" />ています。<Moji emoji="道具" />の<Moji emoji="設計" />も、<Moji emoji="文章" />の<Moji emoji="置き場所" />も、<Moji emoji="要ら" />ないものを<Moji emoji="先" />に<Moji emoji="引い" />ておくと、<Moji emoji="残っ" />たものの<Moji emoji="輪郭" />がはっきりする。<Moji emoji="手元" />では、そんなふうに<Moji emoji="見え" />ました。
