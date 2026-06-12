@@ -1,0 +1,257 @@
+---
+title: "UTMでmacOSアプリ検証を別船に逃がした話"
+description: "開発機でのlaunchd KeepAlive蘇生・flock競合・設定汚染という三重苦を、UTM macOS VMをSSHハーネスで操作することで回避する手法と設計判断の記録"
+pubDate: '2026-06-12'
+author: jozo
+---
+
+![別の小さな船の上で、机にちょこんと載った macOS アプリの窓を確かめている図](/images/macos-app-debug-utm-vm/hero.png)
+
+macOS の<Moji emoji="常駐" />アプリを書いていると、ある<Moji emoji="場面" />で手が止まります。ビルドした debug build を<Moji emoji="起動" />して、「ちゃんと<Moji emoji="窓" />が出るか」を<Moji emoji="確かめ" />たい。<Moji emoji="メニュー" />バー<Moji emoji="常駐" />でも、<Moji emoji="オーバーレイ" />でも、<Moji emoji="壁紙" />でも。やることは<Moji emoji="単純" />なはずなのに、<Moji emoji="自分" />の<Moji emoji="開発" />機でこれをやると、なぜか<Moji emoji="毎回" />甲板が<Moji emoji="汚れ" />ます。
+
+気になったので、なぜ<Moji emoji="汚れる" />のかを一つずつ<Moji emoji="手元" />で<Moji emoji="転がし" />てみました。<Moji emoji="原因" />が見えてくると、<Moji emoji="逃げ" />道も見えてきます。
+
+## 解決したい問題
+
+<Moji emoji="自分" />は [lyra](https://github.com/GeneralD/lyra) という macOS <Moji emoji="常駐" />アプリ（再生中の<Moji emoji="歌詞" />と<Moji emoji="動画" /><Moji emoji="壁紙" />をデスクトップに重ねる<Moji emoji="道具" />）を書いていて、この<Moji emoji="動作" /><Moji emoji="確認" />でいくつも<Moji emoji="つまずき" />ました。<Moji emoji="開発" />機を<Moji emoji="起動" />して、debug build を<Moji emoji="走らせ" />て、<Moji emoji="窓" />を<Moji emoji="見る" />。それだけのことが、なかなか<Moji emoji="素直" />に進みません。
+
+<Moji emoji="観察" />してみると、<Moji emoji="厄介" />さの<Moji emoji="正体" />は三つに分かれていました。一つは [launchd](https://ss64.com/mac/launchctl.html) に飼われた<Moji emoji="本番" /><Moji emoji="サービス" />が、<Moji emoji="殺し" />ても<Moji emoji="蘇る" />こと。二つは<Moji emoji="本番" />と debug が<Moji emoji="同じ" /><Moji emoji="ロック" />を<Moji emoji="奪い合う" />こと。三つは debug build が<Moji emoji="本番" />の<Moji emoji="設定" />と<Moji emoji="キャッシュ" />を<Moji emoji="直接" />食うこと。
+
+同じ<Moji emoji="困り" />ごとに<Moji emoji="出会っ" />ている人がいるかもしれないので、<Moji emoji="手元" />でやってみたことを置いておきます。<Moji emoji="開発" />機を一切<Moji emoji="汚さ" />ずに OS <Moji emoji="レベル" />の<Moji emoji="確認" />をする、その<Moji emoji="配線" />の話です。
+
+## この記事を読み終えたら手に入るもの
+
+- <Moji emoji="開発" />機を<Moji emoji="汚さ" />ずに macOS アプリを OS <Moji emoji="レベル" />で<Moji emoji="確かめ" />る<Moji emoji="手順" />
+- なぜ「<Moji emoji="自分" />のマシンでの<Moji emoji="確認" />」が<Moji emoji="罠" />だらけなのか、その<Moji emoji="根本" />
+- UTM の Apple <Moji emoji="仮想化" />バックエンドで `utmctl exec` が**使えない**という<Moji emoji="落とし穴" />と、その<Moji emoji="回避" />
+- `boot` / `run` / `capture` / `restore` といった<Moji emoji="部品" />の<Moji emoji="組み" />方と、その<Moji emoji="裏" />にある<Moji emoji="判断" />
+- GUI <Moji emoji="セッション" />に<Moji emoji="デーモン" />を挿す `launchctl asuser` の<Moji emoji="使い" />方と、それが<Moji emoji="無い" />と<Moji emoji="窓" />が出ない<Moji emoji="理由" />
+
+## 前提
+
+- ホスト: macOS、Apple Silicon。[UTM](https://docs.getutm.app/) を入れてあること（`brew install --cask utm`）
+- ゲスト: UTM 上に macOS 15+ の VM を [Apple 仮想化バックエンド](https://docs.getutm.app/settings-apple/settings-apple/)で<Moji emoji="作成" />済み。Remote Login (SSH) を<Moji emoji="有効" />にし、`admin` <Moji emoji="ユーザー" />を<Moji emoji="作っ" />てある前提
+- <Moji emoji="知識" />: [`ssh`](https://www.man7.org/linux/man-pages/man1/ssh.1.html) / [`scp`](https://www.man7.org/linux/man-pages/man1/scp.1.html) と bash が<Moji emoji="読め" />ること
+- スコープ外: VM の<Moji emoji="初期" /><Moji emoji="構築" />そのもの（SSH <Moji emoji="鍵" />の<Moji emoji="流し" />込み、passwordless sudo の<Moji emoji="設定" />など）はここでは<Moji emoji="深掘り" />しません。<Moji emoji="主題" />は<Moji emoji="手元" />で組んだ<Moji emoji="配線" />の<Moji emoji="判断" />です
+
+## なぜ開発機での確認が厄介なのか
+
+![開発機の上で口を開けて待つ三つの罠](/images/macos-app-debug-utm-vm/three-traps.png)
+*三つの罠を、一つずつ並べて潰す*
+
+<Moji emoji="罠" />は三つ。<Moji emoji="頭" />で<Moji emoji="決めつけ" />る前に、一個ずつ<Moji emoji="並べ" />てみます。
+
+### 罠その一: launchd KeepAlive の蘇生
+
+[Homebrew](https://brew.sh/) で<Moji emoji="サービス" />として入れたアプリは、launchd に `homebrew.mxcl.lyra` として<Moji emoji="登録" />されます。<Moji emoji="厄介" />なのは、こいつの [`KeepAlive`](https://keith.github.io/xcode-man-pages/launchd.plist.5.html) が `true` だということ。
+
+つまり SIGTERM だろうが SIGKILL だろうが、<Moji emoji="殺し" />た<Moji emoji="瞬間" />に launchd が<Moji emoji="即座" />に<Moji emoji="蘇生" />します。`lyra stop`（<Moji emoji="中身" />は [`kill`](https://ss64.com/mac/kill.html)）を<Moji emoji="叩い" />ても、また<Moji emoji="這い" />出てきます。<Moji emoji="止める" />には、KeepAlive の<Moji emoji="契約" />そのものを<Moji emoji="解除" />するしかありません。
+
+```bash
+brew services stop lyra
+# 中身はこれ:
+# launchctl bootout gui/$UID/homebrew.mxcl.lyra
+```
+
+[`launchctl bootout`](https://keith.github.io/xcode-man-pages/launchctl.8.html) で GUI <Moji emoji="ドメイン" />から<Moji emoji="叩き" />出して、ようやく<Moji emoji="静か" />になります。<Moji emoji="自分" />はこれを<Moji emoji="知ら" />ずに `kill` を<Moji emoji="連打" />していて、しばらく<Moji emoji="噛み合わ" />ない<Moji emoji="時間" />を過ごしました。
+
+### 罠その二: single-instance flock の奪い合い
+
+lyra は `~/.cache/lyra/lyra.pid` に [`flock`](https://www.man7.org/linux/man-pages/man2/flock.2.html) を掛けて、<Moji emoji="同時" />に二<Moji emoji="プロセス" />が<Moji emoji="走ら" />ないようにしています。<Moji emoji="行儀" />のいい<Moji emoji="設計" />です。とはいえ<Moji emoji="開発" />時には<Moji emoji="牙" />を<Moji emoji="剥き" />ます。
+
+<Moji emoji="本番" /><Moji emoji="サービス" />が<Moji emoji="生き" />ていると、debug build は<Moji emoji="ロック" />を<Moji emoji="取れ" />ずに<Moji emoji="即" /><Moji emoji="終了" />します。<Moji emoji="仮" />に<Moji emoji="両方" />を<Moji emoji="無理" />やり<Moji emoji="起動" />できたとしても、今度は<Moji emoji="オーバーレイ" />が<Moji emoji="二重" />に<Moji emoji="描か" />れて、どちらを<Moji emoji="見て" />いるのか分からなくなります。<Moji emoji="本番" />の<Moji emoji="窓" />か、たった今<Moji emoji="ビルド" />した<Moji emoji="窓" />か。<Moji emoji="区別" />のつかない<Moji emoji="確認" />は、<Moji emoji="確認" />になりません。
+
+### 罠その三: 本番の設定とキャッシュを食う
+
+debug build も `~/.config/lyra/` の<Moji emoji="本物" />の<Moji emoji="設定" />と `~/.cache/lyra/` を<Moji emoji="読み" />ます。<Moji emoji="同じ" /><Moji emoji="顔" />をして、<Moji emoji="同じ" /><Moji emoji="皿" />に<Moji emoji="手" />を<Moji emoji="突っ込み" />ます。
+
+<Moji emoji="実験" />のつもりで<Moji emoji="設定" />をいじって、<Moji emoji="本番" /><Moji emoji="設定" />を<Moji emoji="壊す" />。あるいは debug build が<Moji emoji="吐い" />た<Moji emoji="壊れ" />たキャッシュが<Moji emoji="残っ" />て、次に<Moji emoji="本番" />が<Moji emoji="起動" />したときにその<Moji emoji="ゴミ" />を<Moji emoji="食う" />。<Moji emoji="デスクトップ" />が<Moji emoji="実験" />場と<Moji emoji="本番" />を<Moji emoji="兼ね" />ている<Moji emoji="限り" />、この<Moji emoji="汚染" />は<Moji emoji="避け" />られません。
+
+並べてみて<Moji emoji="腑に落ち" />たのは、この三つは<Moji emoji="別々" />の<Moji emoji="問題" />に見えて、<Moji emoji="同じ" />一点に<Moji emoji="根" />を持つ、ということでした。<Moji emoji="確認" />する<Moji emoji="場所" />と<Moji emoji="開発" />する<Moji emoji="場所" />が<Moji emoji="同じ" />だから<Moji emoji="混ざる" />。なら、<Moji emoji="場所" />を物理的に<Moji emoji="分け" />ればいい。<Moji emoji="開発" />機は<Moji emoji="ビルド" />だけして、<Moji emoji="確認" />はクリーンな<Moji emoji="別" />マシンへ<Moji emoji="投げる" />。とはいえ、もう一台 Mac を買うのは<Moji emoji="贅沢" />です。だから VM を使ってみました。
+
+## なぜ UTM の VM なのか
+
+UTM は macOS の上で VM を回す<Moji emoji="道具" />です。Apple Silicon なら [Apple 仮想化バックエンド](https://developer.apple.com/documentation/virtualization)（AVF）が使えて、これは<Moji emoji="速く" />て<Moji emoji="軽い" />。ゲストが<Moji emoji="汚れ" />たらスナップショットを<Moji emoji="戻す" />だけ。<Moji emoji="開発" />機は<Moji emoji="無傷" />のまま。ちょうどよさそうだったので、まず<Moji emoji="最小" />で<Moji emoji="動かし" />てみました。
+
+ところが、<Moji emoji="海図" />に<Moji emoji="載っ" />ていない<Moji emoji="暗礁" />を一つ<Moji emoji="踏み" />ました。
+
+> **Apple <Moji emoji="仮想化" />バックエンドでは [`utmctl`](https://docs.getutm.app/scripting/reference/) の `ip-address` も `exec` も<Moji emoji="動き" />ません。** これらは QEMU バックエンド<Moji emoji="専用" />の<Moji emoji="機能" />です。AVF ゲストに `utmctl exec` を<Moji emoji="叩い" />ても、<Moji emoji="何" />も<Moji emoji="返っ" />てきません。
+
+<Moji emoji="思っ" />ていたのと<Moji emoji="違い" />ました。<Moji emoji="悪い" /><Moji emoji="意味" />ではありません。<Moji emoji="想像" />と<Moji emoji="手元" />の<Moji emoji="挙動" />がずれていた、ただそれだけのことです。じゃあどうやってゲストを<Moji emoji="操る" />か。<Moji emoji="答え" />は<Moji emoji="単純" />で、**全部 SSH <Moji emoji="経由" />でやる** です。ゲストに<Moji emoji="専用" />の SSH <Moji emoji="鍵" />（`~/.ssh/vm_rsa`）を<Moji emoji="仕込ん" />で、<Moji emoji="ビルド" />の<Moji emoji="転送" />も、<Moji emoji="デーモン" />の<Moji emoji="起動" />も、スクリーンショットの<Moji emoji="回収" />も、ぜんぶ [`ssh`](https://www.man7.org/linux/man-pages/man1/ssh.1.html) と [`scp`](https://www.man7.org/linux/man-pages/man1/scp.1.html) で<Moji emoji="叩き" />ます。`utmctl` に<Moji emoji="残す" /><Moji emoji="仕事" />は、こいつにしかできない `start` / `stop` / `status` だけ。
+
+## 手順 — ハーネスの設計判断
+
+ここからが<Moji emoji="本題" />です。[`lyra-vm-harness.sh`](https://github.com/GeneralD/lyra/blob/main/.claude/scripts/lyra-vm-harness.sh) という一本のスクリプトに<Moji emoji="全部" /><Moji emoji="詰め" />ました。サブコマンド<Moji emoji="方式" />で、<Moji emoji="役割" />ごとに<Moji emoji="部品" />を分けています。
+
+```text
+lyra-vm-harness.sh boot     <vm>          # utmctl start + SSH ポーリング (120s timeout)
+lyra-vm-harness.sh run      <vm>          # swift build → scp → /tmp install → daemon 起動
+lyra-vm-harness.sh exec     <vm> -- <cmd> # SSH でコマンド実行
+lyra-vm-harness.sh capture  <vm> [dir]    # スクリーンショット + unified log + process sample
+lyra-vm-harness.sh restore  <vm>          # daemon 停止 + brew service 状態を復元
+lyra-vm-harness.sh shutdown <vm>          # graceful shutdown
+```
+
+<Moji emoji="手元" />で<Moji emoji="組ん" />でいくうちに、四つの<Moji emoji="判断" />が<Moji emoji="残り" />ました。「なんでそうなっているのか」が<Moji emoji="伝わら" />ないと<Moji emoji="真似" />しづらい<Moji emoji="部分" />なので、一つずつ<Moji emoji="瓶詰め" />にしていきます。
+
+### 1. `utmctl exec` ではなく SSH を土台にする
+
+<Moji emoji="土台" />になる<Moji emoji="関数" />はこれだけです。SSH の<Moji emoji="オプション" />を一個の<Moji emoji="関数" />に<Moji emoji="畳ん" />で、あとは<Moji emoji="全部" />こいつを<Moji emoji="呼び" />ます。
+
+```bash
+ssh_run() {
+    local ip="$1"; shift
+    ssh -i "$LYRA_VM_SSH_KEY" -p "$LYRA_VM_SSH_PORT" \
+        -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 \
+        "${LYRA_VM_SSH_USER}@${ip}" "$@"
+}
+```
+
+なぜ `utmctl exec` を<Moji emoji="使わ" />ないか。<Moji emoji="理由" />は二つです。
+
+一つは<Moji emoji="前述" />の<Moji emoji="通り" />、AVF バックエンドでそもそも<Moji emoji="動か" />ない。これは<Moji emoji="決定" />的です。もう一つ。<Moji emoji="仮" />に<Moji emoji="動い" />たとしても、`utmctl exec` は GUI <Moji emoji="ログイン" /><Moji emoji="セッション" />を<Moji emoji="迂回" />します。Homebrew も launchd も AppKit も、<Moji emoji="ログイン" />[<Moji emoji="環境" /><Moji emoji="変数" />](https://www.man7.org/linux/man-pages/man7/environ.7.html)（`PATH` や `TMPDIR`）が<Moji emoji="揃っ" />ていないと<Moji emoji="正しく" /><Moji emoji="動き" />ません。SSH で<Moji emoji="ログイン" /><Moji emoji="ユーザー" />として入れば、その<Moji emoji="全部" />が<Moji emoji="最初" />から<Moji emoji="揃っ" />ています。GUI アプリを<Moji emoji="確かめ" />たいなら、GUI <Moji emoji="セッション" />の<Moji emoji="環境" />ごと<Moji emoji="借りる" />のが<Moji emoji="筋" />でした。
+
+### 2. `launchctl asuser` で GUI にデーモンを挿す
+
+![SSH で起動した宙ぶらりんのプロセスを GUI セッションへ橋渡しする](/images/macos-app-debug-utm-vm/asuser-bridge.png)
+*窓を出すには、GUI セッションの中に挿し込む必要がある*
+
+これが一番<Moji emoji="長く" /><Moji emoji="つまずい" />た<Moji emoji="ところ" />です。
+
+SSH で入って、ゲストの中で `nohup lyra daemon &` とやってみました。PID は<Moji emoji="返っ" />てきます。<Moji emoji="プロセス" />も<Moji emoji="生き" />ています。なのに——**<Moji emoji="窓" />が一枚も出ません。** <Moji emoji="真っ暗" />な<Moji emoji="画面" />に、<Moji emoji="生き" />ているはずの<Moji emoji="プロセス" />だけが<Moji emoji="浮い" />ています。
+
+<Moji emoji="理由" />は、SSH <Moji emoji="セッション" />には window server への<Moji emoji="接続" />が<Moji emoji="無い" />からでした。AppKit の `NSWindow` は、<Moji emoji="誰か" />の GUI <Moji emoji="セッション" />の<Moji emoji="中" />でないと<Moji emoji="画面" />に<Moji emoji="絵" />を出せません。SSH で<Moji emoji="起動" />した<Moji emoji="プロセス" />は、どの GUI <Moji emoji="セッション" />にも<Moji emoji="属さ" />ない<Moji emoji="宙ぶらりん" />の<Moji emoji="幽霊" />でした。
+
+<Moji emoji="浮き輪" />はこれです。[`launchctl asuser`](https://ss64.com/mac/launchctl.html) で、<Moji emoji="ログイン" /><Moji emoji="ユーザー" />の GUI bootstrap namespace に<Moji emoji="デーモン" />を<Moji emoji="挿し" />ます。まず `/tmp/lyra-vm-launch.sh` という<Moji emoji="起動" />スクリプトをゲスト<Moji emoji="上" />に<Moji emoji="書き" />ます。
+
+```bash
+# /tmp/lyra-vm-launch.sh の内容 (ゲスト側に生成して渡す)
+#!/bin/sh
+export UV_CACHE_DIR=/tmp/lyra-vm-uv-cache
+nohup /tmp/lyra-vm-test/lyra daemon > /tmp/lyra-vm-daemon.log 2>&1 &
+echo "$!" > /tmp/lyra-vm-daemon.pid
+```
+
+`UV_CACHE_DIR` を `/tmp` に<Moji emoji="向ける" />のは、`sudo` で<Moji emoji="起動" />した root <Moji emoji="プロセス" />が<Moji emoji="ログイン" /><Moji emoji="ユーザー" />の `~/.cache` に root <Moji emoji="所有" />の<Moji emoji="ファイル" />を<Moji emoji="積ま" />ないためです。<Moji emoji="ログ" />と PID を<Moji emoji="固定" />の `/tmp` <Moji emoji="パス" />に<Moji emoji="吐く" />のにも<Moji emoji="理由" />があって、`sudo` は `$HOME` を `/var/root` に<Moji emoji="書き換える" />ので、`$HOME` を使うと SSH <Moji emoji="ユーザー" />から<Moji emoji="見え" />ない<Moji emoji="パス" />になります。
+
+次に [`id -u`](https://ss64.com/mac/id.html) で<Moji emoji="ログイン" /><Moji emoji="ユーザー" />の<Moji emoji="数値" /> UID を<Moji emoji="引い" />て、`sudo launchctl asuser <uid>` でその<Moji emoji="ユーザー" />の GUI namespace の<Moji emoji="中" />で<Moji emoji="起動" />します。
+
+```bash
+local uid
+uid=$(ssh_run "$ip" "id -u")
+ssh_run "$ip" "sudo launchctl asuser $uid /tmp/lyra-vm-launch.sh"
+```
+
+これで<Moji emoji="初め" />て `NSWindow` が window server に<Moji emoji="繋がっ" />て、<Moji emoji="画面" />に<Moji emoji="絵" />が出ました。UID を<Moji emoji="ハードコード" />せず `id -u` で<Moji emoji="引い" />ているのは、ゲストの<Moji emoji="ユーザー" /><Moji emoji="構成" />が<Moji emoji="変わっ" />ても<Moji emoji="壊れ" />ないようにです。<Moji emoji="船" />が<Moji emoji="変わっ" />ても<Moji emoji="通る" /><Moji emoji="配線" />にしておきます。
+
+### 3. `/tmp` への隔離インストール
+
+ゲストにも brew で<Moji emoji="入れ" />た<Moji emoji="本番" />の lyra がいます。これを debug build で**<Moji emoji="絶対" />に<Moji emoji="上書き" />しない。** <Moji emoji="上書き" />したら、ゲストの clean state が<Moji emoji="壊れ" />て、restore の<Moji emoji="意味" />が<Moji emoji="消え" />ます。だから debug build は `/tmp` の<Moji emoji="隔離" />ディレクトリに [`install`](https://ss64.com/mac/install.html) します。
+
+```bash
+# ホストでビルドしてゲストの /tmp/lyra-drop に転送
+swift build -c release
+scp -i "$LYRA_VM_SSH_KEY" .build/release/lyra "${LYRA_VM_SSH_USER}@${ip}:/tmp/lyra-drop/"
+# Bundle.module lookup に必要な *.bundle も転送
+for bundle in .build/release/*.bundle; do
+    [ -d "$bundle" ] && scp -r -i "$LYRA_VM_SSH_KEY" "$bundle" "${LYRA_VM_SSH_USER}@${ip}:/tmp/lyra-drop/"
+done
+
+# /tmp の隔離ディレクトリにインストール（brew 管理バイナリは絶対に触らない）
+ssh_run "$ip" "rm -rf /tmp/lyra-vm-test && mkdir -p /tmp/lyra-vm-test"
+ssh_run "$ip" "install -m 755 /tmp/lyra-drop/lyra /tmp/lyra-vm-test/lyra"
+```
+
+`/tmp` に<Moji emoji="置け" />ば、ゲストを<Moji emoji="再起動" />するか restore すれば<Moji emoji="跡形" />もなく<Moji emoji="消え" />ます。brew が<Moji emoji="管理" />している<Moji emoji="バイナリ" />には<Moji emoji="指" />一本<Moji emoji="触れ" />ていません。<Moji emoji="実験" />が<Moji emoji="実験" />の<Moji emoji="砂場" />で<Moji emoji="完結" />します。
+
+### 4. `kill -0` による起動直後の生死確認
+
+`nohup ... &` で<Moji emoji="起動" />すると、PID は<Moji emoji="即座" />に<Moji emoji="返っ" />てきます。とはいえ、<Moji emoji="起動" />した<Moji emoji="直後" />に<Moji emoji="墜ちる" />こともあります。<Moji emoji="設定" />ミス、<Moji emoji="ライブラリ" />の<Moji emoji="読み込み" /><Moji emoji="失敗" />、なんでも。PID はあるのに、<Moji emoji="中身" />はもう<Moji emoji="死ん" />でいる。
+
+ここで<Moji emoji="嘘" />の「<Moji emoji="起動" /><Moji emoji="成功" />」を<Moji emoji="報告" />したら、<Moji emoji="死体" />に向かってスクリーンショットを<Moji emoji="撮る" />ことになります。だから 3 <Moji emoji="秒" /><Moji emoji="待っ" />て、<Moji emoji="生死" />だけ<Moji emoji="確かめ" />ます。
+
+```bash
+sleep 3
+if ! ssh_run "$ip" "kill -0 '$pid' 2>/dev/null"; then
+    ssh_run "$ip" "tail -n 40 /tmp/lyra-vm-test/lyra.log" >&2
+    echo "daemon は起動直後に沈んだ" >&2
+    exit 1
+fi
+```
+
+[`kill -0`](https://ss64.com/mac/kill.html) は<Moji emoji="名前" />に<Moji emoji="反し" />てシグナルを<Moji emoji="送り" />ません。<Moji emoji="プロセス" />が<Moji emoji="存在" />するかどうかだけを<Moji emoji="返し" />ます。<Moji emoji="生き" />ていれば<Moji emoji="成功" />、<Moji emoji="死ん" />でいれば<Moji emoji="失敗" />。3 <Moji emoji="秒" />の<Moji emoji="猶予" />を<Moji emoji="与え" />てから<Moji emoji="叩く" />ことで、「<Moji emoji="起動" />はしたが<Moji emoji="即" /><Moji emoji="墜ち" />た」を<Moji emoji="捕まえ" />ます。<Moji emoji="沈ん" />だなら、<Moji emoji="黙っ" />てクラッシュ<Moji emoji="ログ" />を<Moji emoji="吐か" />せて<Moji emoji="止め" />ます。<Moji emoji="報告" />は<Moji emoji="正直" />なほうがいいので。
+
+## 検証 — スクリーンショットを回収する
+
+<Moji emoji="デーモン" />が<Moji emoji="生き" />ていることを<Moji emoji="確かめ" />たら、<Moji emoji="絵" />を<Moji emoji="撮り" />ます。`capture` の<Moji emoji="仕事" />です。ここでも一つ<Moji emoji="罠" />を<Moji emoji="踏み" />ました。<Moji emoji="撮ろ" />うとした<Moji emoji="瞬間" />にゲストのディスプレイが<Moji emoji="スリープ" />していると、<Moji emoji="撮れる" />のは<Moji emoji="真っ暗" />な<Moji emoji="画面" />だけでした。
+
+だから<Moji emoji="撮る" /><Moji emoji="前" />に [`caffeinate -u -t 3`](https://ss64.com/mac/caffeinate.html) でディスプレイを<Moji emoji="起こし" />て、UTM <Moji emoji="ウィンドウ" />の ID を [`CGWindowListCopyWindowInfo`](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo(_:_:)) で<Moji emoji="引い" />て、[`screencapture -l <wid>`](https://ss64.com/mac/screencapture.html) でその<Moji emoji="窓" />だけ<Moji emoji="撮り" />ます。これはホスト<Moji emoji="側" />の<Moji emoji="コード" />です。
+
+```bash
+# ホスト側で UTM ウィンドウの window id を取得
+utm_wid="$(swift - <<'SWIFT'
+import CoreGraphics
+let wins = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as! [[String:Any]]
+let candidates = wins.compactMap { w -> (Int, Int)? in
+    guard let owner = w["kCGWindowOwnerName"] as? String, owner == "UTM",
+          let num = w["kCGWindowNumber"] as? Int,
+          let bounds = w["kCGWindowBounds"] as? [String:Any],
+          let w2 = bounds["Width"] as? CGFloat, let h2 = bounds["Height"] as? CGFloat
+    else { return nil }
+    return (num, Int(w2 * h2))
+}.sorted { $0.1 > $1.1 }
+if let best = candidates.first { print(best.0) }
+SWIFT
+)"
+
+# 撮影直前にディスプレイを起こして、UTM ウィンドウだけキャプチャ
+caffeinate -u -t 3 &
+screencapture -l "$utm_wid" "$out_dir/screenshot.png"
+```
+
+`caffeinate -u -t 3` で 3 <Moji emoji="秒" />だけ<Moji emoji="ユーザー" /><Moji emoji="活動" />を<Moji emoji="装っ" />てディスプレイを<Moji emoji="起こし" />ます。Swift の<Moji emoji="スニペット" />は UTM <Moji emoji="ウィンドウ" />を「<Moji emoji="最大" /><Moji emoji="面積" />」で<Moji emoji="選び" />ます——VM <Moji emoji="表示" />の<Moji emoji="窓" />がいちばん<Moji emoji="大きい" />からです。`capture` は<Moji emoji="絵" />だけでなく、[`log show`](https://ss64.com/mac/log.html) の unified log と [`sample`](https://keith.github.io/xcode-man-pages/sample.1.html) による process sample も<Moji emoji="同時" />に<Moji emoji="回収" />します。<Moji emoji="動作" /><Moji emoji="確認" />は「<Moji emoji="窓" />が出たか」だけでなく、「どう<Moji emoji="動い" />ているか」まで<Moji emoji="持ち帰っ" />てこそ、と<Moji emoji="手元" />で<Moji emoji="やっ" />てみて<Moji emoji="思い" />ました。
+
+## 落とし穴
+
+![航海の終わりに、必ず元の港へ戻して後始末する](/images/macos-app-debug-utm-vm/restore-voyage.png)
+*後始末を trap に縛りつけて、必ず clean state へ戻す*
+
+### 症状: `utmctl exec` が無言で何も返さない
+
+<Moji emoji="原因" />: Apple <Moji emoji="仮想化" />バックエンドでは `utmctl exec` / `ip-address` が<Moji emoji="未対応" />。QEMU <Moji emoji="専用" />です。
+<Moji emoji="対処" />: <Moji emoji="全部" />の<Moji emoji="操作" />を SSH <Moji emoji="経由" />に<Moji emoji="切り替え" />ます。IP は<Moji emoji="環境" /><Moji emoji="変数" />で<Moji emoji="固定" />するか、[Bridged networking](https://docs.getutm.app/guest-support/macos/#network-modes) で DHCP <Moji emoji="固定" />にすると<Moji emoji="楽" />でした。
+
+### 症状: デーモンは生きているのに窓が一枚も出ない
+
+<Moji emoji="原因" />: SSH <Moji emoji="セッション" />には window server <Moji emoji="接続" />が<Moji emoji="無い" />。`NSWindow` は GUI <Moji emoji="セッション" />の<Moji emoji="中" />でないと<Moji emoji="描画" />できません。
+<Moji emoji="対処" />: `sudo launchctl asuser $(id -u) <起動スクリプト>` で、<Moji emoji="ログイン" /><Moji emoji="ユーザー" />の GUI namespace に<Moji emoji="挿し" />ます。
+
+### 症状: スクリーンショットが真っ黒
+
+<Moji emoji="原因" />: キャプチャの<Moji emoji="瞬間" />にゲストのディスプレイが<Moji emoji="スリープ" />していた。
+<Moji emoji="対処" />: `caffeinate -u -t 3 &` で<Moji emoji="撮影" /><Moji emoji="直前" />にディスプレイを<Moji emoji="起こし" />ます。
+
+### 症状: 確認の途中で落ちて、状態が散らかったまま残る
+
+ゲストを<Moji emoji="汚さ" />ないのが<Moji emoji="信条" />なら、<Moji emoji="後始末" />も<Moji emoji="同じ" />くらい<Moji emoji="大事" />です。一番<Moji emoji="困る" />のは、<Moji emoji="確認" />の<Moji emoji="途中" />でスクリプトが<Moji emoji="落ち" />て、<Moji emoji="デーモン" />が<Moji emoji="起動" />しっぱなし・brew <Moji emoji="サービス" />が<Moji emoji="止まっ" />たまま<Moji emoji="放置" />されることでした。次の<Moji emoji="セッション" />で「あれ、<Moji emoji="状態" />がおかしい」が始まります。
+
+だから [`trap`](https://www.man7.org/linux/man-pages/man1/bash.1.html) で `restore` を EXIT に<Moji emoji="縛り" />つけます。
+
+```bash
+# 確認の典型的な航海:
+.claude/scripts/lyra-vm-harness.sh boot "lyra-test-vm"
+trap ".claude/scripts/lyra-vm-harness.sh restore 'lyra-test-vm'" EXIT
+.claude/scripts/lyra-vm-harness.sh run "lyra-test-vm"
+.claude/scripts/lyra-vm-harness.sh capture "lyra-test-vm" ./artifacts
+.claude/scripts/lyra-vm-harness.sh shutdown "lyra-test-vm"
+```
+
+`restore` は二つやります。`/tmp` の debug <Moji emoji="デーモン" />を<Moji emoji="止め" />て、ゲストの brew <Moji emoji="サービス" />を<Moji emoji="元" />の<Moji emoji="状態" />に<Moji emoji="戻し" />ます。これを EXIT trap に<Moji emoji="括っ" />ておけば、スクリプトが<Moji emoji="正常" />に<Moji emoji="終わ" />ろうが、<Moji emoji="エラー" />で<Moji emoji="沈も" />うが、Ctrl-C で<Moji emoji="蹴ら" />れようが、<Moji emoji="必ず" />ゲストは clean state に<Moji emoji="帰り" />ます。<Moji emoji="補足" />すると、`boot` の<Moji emoji="中" />では `utmctl start` の<Moji emoji="後" />に SSH が<Moji emoji="通る" />まで<Moji emoji="ポーリング" />します。macOS ゲストは SSH が<Moji emoji="立つ" />まで 60〜90 <Moji emoji="秒" />かかることがあるので、タイムアウトは 120 <Moji emoji="秒" /><Moji emoji="見て" />おくと<Moji emoji="安心" />でした。<Moji emoji="早" />く<Moji emoji="諦める" />と、まだ<Moji emoji="目覚め" />ていないゲストに「<Moji emoji="死ん" />でいる」と<Moji emoji="烙印" />を<Moji emoji="押す" />ことになります。
+
+## 次の一手
+
+ここまでで、<Moji emoji="開発" />機を一切<Moji emoji="汚さ" />ずに macOS アプリを OS <Moji emoji="レベル" />で<Moji emoji="確かめる" /><Moji emoji="配線" />は<Moji emoji="通り" />ました。<Moji emoji="自分" />のアプリでやってみるなら、まず<Moji emoji="固有" />の「<Moji emoji="汚染" />源」を三つ<Moji emoji="書き出し" />てみてもいいかもしれません。launchd の<Moji emoji="登録" /><Moji emoji="名" />は<Moji emoji="何" />か、single-instance <Moji emoji="ロック" />はどこか、<Moji emoji="設定" />とキャッシュはどの<Moji emoji="パス" />を<Moji emoji="食う" />か。それが<Moji emoji="分かれ" />ば、`run` と `restore` の<Moji emoji="中身" />を<Moji emoji="自分" />のアプリ<Moji emoji="用" />に<Moji emoji="置き換える" />だけです。
+
+<Moji emoji="動かし" />てみて<Moji emoji="分かっ" />たのは、<Moji emoji="厄介" />さの<Moji emoji="正体" />は<Moji emoji="思っ" />たより<Moji emoji="単純" />だった、という一点でした。<Moji emoji="複雑" />そうに見えていたのは、<Moji emoji="確認" />と<Moji emoji="開発" />が<Moji emoji="同じ" /><Moji emoji="場所" />で<Moji emoji="混ざっ" />ていた、ただそれだけ。<Moji emoji="場所" />を<Moji emoji="別" />の<Moji emoji="船" />に<Moji emoji="分け" />たら、三つの<Moji emoji="罠" />は<Moji emoji="静か" />に<Moji emoji="消え" />ました。とはいえ、この VM ハーネスは<Moji emoji="窓" />が出るところまでで、クリックやキー<Moji emoji="入力" />といった UI の<Moji emoji="自動" /><Moji emoji="操作" />までは<Moji emoji="やっ" />ていません。そこまで<Moji emoji="踏み込む" />なら、また<Moji emoji="別" />の<Moji emoji="航海" />です。
+
+<Moji emoji="配線" />図は<Moji emoji="置い" />ておきました。あとは<Moji emoji="自分" />の<Moji emoji="手元" />で、<Moji emoji="好き" />に<Moji emoji="転がし" />てみてください。
