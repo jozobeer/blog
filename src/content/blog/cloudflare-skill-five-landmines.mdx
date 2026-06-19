@@ -5,6 +5,8 @@ pubDate: 'Jun 19 2026'
 author: GeneralD
 ---
 
+![5つの罠を踏み越えるエンジニア — ヒーローイラスト](/images/cloudflare-skill-five-landmines/hero.png)
+
 [Astro](https://astro.build/) + [Cloudflare Workers](https://developers.cloudflare.com/workers/) で<Moji emoji="ランディング" /><Moji emoji="ページ" />を<Moji emoji="自動" /><Moji emoji="デプロイ" />する Claude Code <Moji emoji="スキル" />——`launch-site`——を<Moji emoji="作り" />ました。<Moji emoji="作り" />終えてみると、5つの<Moji emoji="罠" />を踏んでいました。<Moji emoji="ドキュメント" />に<Moji emoji="書いて" />いない<Moji emoji="罠" />、<Moji emoji="思い込み" />の<Moji emoji="罠" />、「それ<Moji emoji="仕様" />ですか」という<Moji emoji="罠" />。<Moji emoji="手元" />で<Moji emoji="確かめ" />た<Moji emoji="順" />に<Moji emoji="書き" />ます。
 
 ---
@@ -40,7 +42,9 @@ Just a moment...
 Performing security verification...
 ```
 
-Cloudflare<Moji emoji="自身" />が、headless Chromium の<Moji emoji="ボット" /><Moji emoji="フィンガー" /><Moji emoji="プリント" />を<Moji emoji="弾き" />ました。<Moji emoji="自社" /><Moji emoji="ダッシュ" /><Moji emoji="ボード" />で<Moji emoji="自社" />の<Moji emoji="ボット" /><Moji emoji="検知" />が<Moji emoji="火" />を噴く——なかなか<Moji emoji="面白い" /><Moji emoji="構図" />です。headless<Moji emoji="モード" />を<Moji emoji="諦め" />て `--headed` で<Moji emoji="起動" />しても、<Moji emoji="クッキー" />がなければ<Moji emoji="同じ" /><Moji emoji="画面" />で<Moji emoji="止まり" />ます。
+Cloudflare<Moji emoji="自身" />が、headless Chromium の<Moji emoji="ボット" /><Moji emoji="フィンガー" /><Moji emoji="プリント" />を<Moji emoji="弾き" />ました。<Moji emoji="自社" /><Moji emoji="ダッシュ" /><Moji emoji="ボード" />で<Moji emoji="自社" />の<Moji emoji="ボット" /><Moji emoji="検知" />が<Moji emoji="火" />を噴く——なかなか<Moji emoji="面白い" /><Moji emoji="構図" />です。
+
+![headless Chromium が Cloudflare のセキュリティ検証で弾かれるシーン](/images/cloudflare-skill-five-landmines/headless-blocked.png)headless<Moji emoji="モード" />を<Moji emoji="諦め" />て `--headed` で<Moji emoji="起動" />しても、<Moji emoji="クッキー" />がなければ<Moji emoji="同じ" /><Moji emoji="画面" />で<Moji emoji="止まり" />ます。
 
 突破口は **browser session transplant**——<Moji emoji="普段" />使い<Moji emoji="ブラウザ" />から<Moji emoji="クッキー" />を<Moji emoji="持ち込む" /><Moji emoji="方式" />です。<Moji emoji="セッション" />を<Moji emoji="移植" />してから `--headed` で<Moji emoji="起動" />したら、<Moji emoji="チャレンジ" />を<Moji emoji="通過" />して<Moji emoji="認証" />済みの<Moji emoji="ダッシュ" /><Moji emoji="ボード" />に<Moji emoji="到達" />しました。
 
@@ -139,6 +143,8 @@ page.on('dialog', async (dialog) => {
 GitHub<Moji emoji="連携" /><Moji emoji="フロー" />で「どの<Moji emoji="アカウント" />で<Moji emoji="接続" />するか」を<Moji emoji="選ぶ" /><Moji emoji="ドロップ" /><Moji emoji="ダウン" />があります。<Moji emoji="スキル" />は<Moji emoji="自動化" />で<Moji emoji="組織" /><Moji emoji="アカウント" />を<Moji emoji="選択" />しようとしました。
 
 問題は、**<Moji emoji="選択" />しただけでは<Moji emoji="永続" />されない**ことです。
+
+![null アカウントが選ばれたドロップダウン — 困惑するエンジニアのイラスト](/images/cloudflare-skill-five-landmines/git-selector.png)
 
 <Moji emoji="ドロップ" /><Moji emoji="ダウン" />で<Moji emoji="アカウント" />を<Moji emoji="選ぶ" /> → 「次へ」 → 次の<Moji emoji="フォーム" />へ<Moji emoji="進む" />。ここまでは<Moji emoji="動き" />ます。しかし「次へ」の内部で<Moji emoji="非同期" />の<Moji emoji="保存" /><Moji emoji="処理" />が<Moji emoji="走って" />おり、その<Moji emoji="完了" />前に進むと<Moji emoji="アカウント" />が `null` のまま後続の API が<Moji emoji="呼ばれ" />ます。<Moji emoji="ログ" />には何も<Moji emoji="出ません" />。<Moji emoji="エラー" />もありません。ただ `null` で<Moji emoji="進み" />ます。
 
