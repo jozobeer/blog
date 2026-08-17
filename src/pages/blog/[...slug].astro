@@ -2,20 +2,43 @@
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 import Moji from '../../components/Moji.astro';
+import MojiPlain from '../../components/MojiPlain.astro';
+import {
+	DEFAULT_READING_MODE,
+	hasMoji,
+	modeRoutes,
+	type ReadingContext,
+} from '../../lib/readingMode';
 
 export async function getStaticPaths() {
 	const posts = await getCollection('blog');
-	return posts.map((post) => ({
-		params: { slug: post.id },
-		props: post,
-	}));
+	return posts.flatMap((post) => {
+		const defaultMode = post.data.defaultMode ?? DEFAULT_READING_MODE;
+		const routes = modeRoutes(post.id, defaultMode, hasMoji(post.body));
+		return routes.map((route) => ({
+			params: { slug: route.slug },
+			props: {
+				post,
+				reading: {
+					slug: post.id,
+					mode: route.mode,
+					defaultMode,
+					hasAlternate: routes.length > 1,
+				},
+			},
+		}));
+	});
 }
-type Props = CollectionEntry<'blog'>;
 
-const post = Astro.props;
+type Props = {
+	post: CollectionEntry<'blog'>;
+	reading: ReadingContext;
+};
+
+const { post, reading } = Astro.props;
 const { Content } = await render(post);
 ---
 
-<BlogPost {...post.data}>
-	<Content components={{ Moji }} />
+<BlogPost {...post.data} reading={reading}>
+	<Content components={{ Moji: reading.mode === 'emoji' ? Moji : MojiPlain }} />
 </BlogPost>

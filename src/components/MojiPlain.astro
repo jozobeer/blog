@@ -1,0 +1,11 @@
+---
+// Moji のプレーン版。語をそのままテキストとして出す。
+// nextIndex() を呼ばないこと。呼ぶとビルド全体の出現カウンタがずれ、
+// 全記事の mojiemoji 画像の色・フォント・アニメが変わる。
+interface Props {
+  emoji: string;
+}
+
+const { emoji } = Astro.props;
+---
+{emoji.trim()}
