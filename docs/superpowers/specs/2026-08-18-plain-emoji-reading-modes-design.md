@@ -2,7 +2,8 @@
 
 - 日付: 2026-08-18
 - 対象リポジトリ: JOZO's blog（Astro v6 SSG）
-- ステータス: 設計合意済み（grilling による決定木確定。実装計画は未作成）
+- ステータス: 設計合意済み（grilling による決定木確定）
+- 実装計画: `docs/superpowers/plans/2026-08-18-plain-emoji-reading-modes.md`
 - 前提 spec: `docs/superpowers/specs/2026-05-25-mojiemoji-mdx-component-design.md`
 
 ## 1. 目的・背景
@@ -63,7 +64,8 @@
 - 副ページの `<link rel="canonical">` は `/blog/<slug>/` を指す
   （現 `BaseHead.astro` は `Astro.url.pathname` で自己参照 canonical を出すため、上書き用 prop の追加が要る）。
 - 副ページは `@astrojs/sitemap` の `filter` で除外（`filter?(page: string): boolean` が v3.7.2 に存在）。
-- `<head>` に `<link rel="alternate">` でもう片方を示す。
+- `<head>` に `<link rel="alternate" type="text/html">` でもう片方を示す。
+  `type` を付けるのは、既存の RSS リンクが同じ `rel="alternate"`（`type="application/rss+xml"`）を使っているため。
 - RSS・OGP・記事一覧は**変更しない**。一覧のリンク先は `/blog/<slug>/` のみ。
 
 ## 4. コンポーネント構成
@@ -75,6 +77,20 @@
 |---|---|---|
 | mojiemoji | `components={{ Moji }}` | 現状どおり `<img>` |
 | プレーン | `components={{ Moji: MojiPlain }}` | **語の素テキストのみ**（ラッパー要素なし。§10） |
+
+### `BlogPost.astro` は記事専用ではない
+
+`src/pages/about.astro:2` が同じレイアウトを `title` / `description` / `pubDate` / `author` の
+4 つだけで使っている。表示モードの情報を必須 prop にすると `/about/` が壊れる
+（Astro は props を実行時に強制しないため**ビルドは成功したまま** canonical が `/blog/undefined/` になる）。
+
+そのため表示モードの情報は `reading?: ReadingContext`（slug / mode / defaultMode / hasAlternate）という
+**任意の 1 グループ**で渡す。「4 つ全部そろうか、まったく無いか」に限定し、中途半端な組み合わせを型で排除する。
+`reading` が無ければ切替 UI も canonical 上書きも行わず、現状の挙動をそのまま保つ。
+
+frontmatter の `defaultMode` は `.default('plain')` ではなく `.optional()` にする。
+Zod の `.default()` は出力型を必須にするため、`CollectionEntry<'blog'>['data']` を
+Props に使う `about.astro` が型不整合になる。
 
 > **`MojiPlain` は `nextIndex()` を呼んではならない。**
 > `src/lib/mojiemoji.ts:165` の `_occurrence` は**ビルド全体で共有されるモジュールグローバル**で、
@@ -122,7 +138,7 @@
 `src/content.config.ts` に追加:
 
 ```ts
-defaultMode: z.enum(['plain', 'emoji']).default('plain')
+defaultMode: z.enum(['plain', 'emoji']).optional()
 ```
 
 `mojiemoji.mdx` のみ `defaultMode: 'emoji'`。同記事は mojiemoji 本体のショーケースを兼ねており、
