@@ -5,6 +5,7 @@ import BaseHead from '../components/BaseHead.astro';
 import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
+import ReadingModeSwitch from '../components/ReadingModeSwitch.astro';
 import type { ReadingContext } from '../lib/readingMode';
 
 type Props = CollectionEntry<'blog'>['data'] & {
@@ -43,6 +44,15 @@ const { title, description, pubDate, updatedDate, heroImage, author, reading } =
 						<p>author: {author}</p>
 						<h1>{title}</h1>
 						<hr />
+						{
+							reading?.hasAlternate && (
+								<ReadingModeSwitch
+									slug={reading.slug}
+									mode={reading.mode}
+									defaultMode={reading.defaultMode}
+								/>
+							)
+						}
 					</div>
 					<slot />
 				</div>

@@ -1,0 +1,36 @@
+---
+import { modeHref, type ReadingMode } from '../lib/readingMode';
+
+interface Props {
+  slug: string;
+  /** いま表示しているモード */
+  mode: ReadingMode;
+  /** この記事の既定モード（href の組み立てに要る） */
+  defaultMode: ReadingMode;
+}
+
+const { slug, mode, defaultMode } = Astro.props;
+
+// 並び順は記事の既定モードによらず固定。
+const items: { mode: ReadingMode; label: string }[] = [
+  { mode: 'plain', label: 'プレーン' },
+  { mode: 'emoji', label: 'mojiemoji' },
+];
+---
+
+<nav aria-label="表示モード">
+  <div role="group">
+    {
+      items.map((item) => (
+        <a
+          href={modeHref(slug, item.mode, defaultMode)}
+          role="button"
+          aria-current={item.mode === mode ? 'page' : undefined}
+          rel={item.mode === mode ? undefined : 'alternate'}
+        >
+          {item.label}
+        </a>
+      ))
+    }
+  </div>
+</nav>
