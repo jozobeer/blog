@@ -19,6 +19,7 @@
 - **`MojiPlain` は `nextIndex()` を呼ばない。** `src/lib/mojiemoji.ts:167` の `_occurrence` はビルド全体で共有されるモジュールグローバルで、呼び出し回数が変わると全記事の色・フォント・アニメが変わる。
 - **切替 UI の並び順は常に「左＝プレーン／右＝mojiemoji」**。記事のデフォルトが `emoji` でも変えない。
 - **文言は `プレーン` と `mojiemoji`。** 「絵文字」という語を UI に使わない（読者が Unicode の 😀 を想像するため）。
+- **型検査を通す。** `npm run check`（`astro check`）が `0 errors` であること。`@astrojs/check` + `typescript` は devDependencies（ブラウザには配信されない）。導入時点の既存コードベースは 20 ファイル 0 errors。
 - インデントは触るファイルの既存スタイルに合わせる（`src/lib/*.ts` は 2 スペース、`.astro` と `src/content.config.ts` はタブ）。
 
 ## 事前に検証済みの事実（再確認不要）
@@ -32,6 +33,7 @@
 | `~/.claude/hooks/delegate-coding.sh` は `settings.json` に登録されておらず、`.astro` の直接編集は通る | 実測（2026-08-18） |
 | **全ページの HTML に文字列 `mojiemoji.jozo.beer` が 1 件出る**（`global.css` の `img[src*="mojiemoji.jozo.beer"]` が inline 化されるため）。画像の有無は `mojiemoji.jozo.beer/emoji/` で判定すること | 実測: `dist/blog/hello/index.html`（`<Moji>` 0 個）で 1 件ヒット |
 | RSS の `<link>` はチャンネル自身の 1 本を含む（記事 5 本 + 1 = 6 本） | 実測（2026-08-18） |
+| `astro check` は `.ts` ファイルの型エラーも検出する（`src/lib/readingMode.ts` に `const _bad: ReadingMode = "sepia"` を入れて 1 error を確認） | 実測（2026-08-18） |
 
 ## File Structure
 
@@ -117,12 +119,30 @@ mojiemoji                        160
 
 ```ts
 import { describe, it, expect } from 'vitest';
+import * as readingMode from './readingMode';
 import {
+  DEFAULT_READING_MODE,
   alternateMode,
   modeRoutes,
   modeHref,
   hasMoji,
 } from './readingMode';
+import type { ReadingMode, ReadingContext, ModeRoute } from './readingMode';
+
+describe('module contract', () => {
+  it('exports exactly the runtime API', () => {
+    expect(Object.keys(readingMode).sort()).toEqual([
+      'DEFAULT_READING_MODE',
+      'alternateMode',
+      'hasMoji',
+      'modeHref',
+      'modeRoutes',
+    ]);
+  });
+  it('defaults an article without frontmatter to plain', () => {
+    expect(DEFAULT_READING_MODE).toBe('plain');
+  });
+});
 
 describe('alternateMode', () => {
   it('maps plain to emoji and back', () => {
@@ -175,7 +195,31 @@ describe('modeHref', () => {
     expect(modeHref('mojiemoji', 'plain', 'emoji')).toBe('/blog/mojiemoji/plain/');
   });
 });
+
+// --- 型契約のアサーション ---
+// 型は実行時に消えるので vitest では固定できない。ここは `npm run check`（astro check）が検証する。
+type Assert<T extends true> = T;
+type Equals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+
+type _ReadingModeIsExactlyTwo = Assert<Equals<ReadingMode, 'plain' | 'emoji'>>;
+type _ReadingContextShape = Assert<
+  Equals<
+    ReadingContext,
+    { slug: string; mode: ReadingMode; defaultMode: ReadingMode; hasAlternate: boolean }
+  >
+>;
+type _ModeRouteShape = Assert<
+  Equals<ModeRoute, { slug: string; mode: ReadingMode; isDefault: boolean }>
+>;
 ```
+
+> **契約を 2 層で固定する。**
+> `module contract` の 2 件は**実行時**の契約（export の集合と定数の値）を vitest で固定する。
+> `DEFAULT_READING_MODE` を `'emoji'` に書き換えると全記事の既定モードが静かに反転するため、値で固定する。
+> 型は実行時に消えるので vitest では固定できない。代わりにテストファイル末尾の
+> **型アサーション**（下記）が `npm run check` で固定する。これで型 export の削除・
+> `ReadingMode` への値追加・インターフェースのフィールド型変更がすべて `0 errors` を破る。
 
 - [ ] **Step 2: テストを実行して失敗を確認**
 
@@ -253,8 +297,8 @@ export function modeHref(
 
 - [ ] **Step 4: テストを実行して通ることを確認**
 
-Run: `npm test`
-Expected: PASS（既存の `mojiemoji.test.ts` 22 件 + 新規 10 件 = 32 件）
+Run: `npm test && npm run check`
+Expected: テスト PASS（既存の `mojiemoji.test.ts` 22 件 + 新規 12 件 = 34 件）、`astro check` が `0 errors`
 
 - [ ] **Step 5: コミット**
 
@@ -888,6 +932,7 @@ git commit -m "docs: correct test runner note and record reading-mode design"
 
 - [ ] `npm run build` が成功する
 - [ ] `npm test` が通る
+- [ ] `npm run check`（astro check）が `0 errors`
 - [ ] 絵文字版の URL 出現列がベースラインと完全一致（Task 2 Step 7 の手順を再実行）
 - [ ] プレーン版ページの mojiemoji URL が 0 本
 - [ ] 2 回ビルドして URL 列が一致
