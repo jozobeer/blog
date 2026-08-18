@@ -10,12 +10,10 @@ export default defineConfig({
 	integrations: [
 		mdx(),
 		sitemap({
-			// プレーン／mojiemoji の副ページは同一記事の別表現なので、
-			// canonical 側（/blog/<slug>/）だけを sitemap に載せる。
-			// 記事 id はネストしうる（glob が **/*.{md,mdx}）ので、`/blog/` と
-			// モード名の間は 1 セグメントとは限らない。`.+` で受ける。
-			// 「多セグメントで末尾がモード名」の主ページは assertRoutableSlug が
-			// ビルド時に落とすため、この形にマッチするのは副ページだけになる。
+			// 副ページは同一記事の別表現なので canonical 側だけを載せる。
+			// 記事 id はネストしうる（glob が **/*.{md,mdx}）ため `/blog/` とモード名の
+			// 間は 1 セグメントとは限らない。`.+` で受けても、末尾がモード名の主ページは
+			// assertRoutableSlug がビルド時に落とすので、残るのは副ページだけ。
 			filter: (page) => !/\/blog\/.+\/(plain|emoji)\/$/.test(page),
 		}),
 	],
