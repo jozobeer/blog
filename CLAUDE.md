@@ -21,7 +21,9 @@ aube preview      # ビルド結果のローカルプレビュー
 aube astro -- --help   # astro check など CLI
 ```
 
-Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環境と揃えるため。`package.json` の `engines` も `>=22.12.0`）。テストランナーは未導入。検証はビルドの成否と dev サーバでの目視確認で行う。
+Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環境と揃えるため。`package.json` の `engines` も `>=22.12.0`）。
+
+検証は3層。純粋ロジック（`src/lib/*.ts`）は `aube test`（vitest）で単体テスト、型は `aube check`（`astro check`）、`.astro` の描画はビルド成果物（`dist/`）の検査と dev サーバでの目視で確認する。型は実行時に消えるため、`aube test` も `aube build` も型の誤りを検出しない — 型契約を固定したいときは `aube check` が唯一の手段。
 
 ## 設計思想
 
@@ -40,6 +42,8 @@ Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環�
    - 高速レンダリングとは逆行するが、本文中に **mojiemoji**（`mojiemoji.jozo.beer`）を使って楽しい見た目にする。
    - 速度一辺倒ではなく "楽しさ" のための意図的なコストは許容する、という線引き。
    - **実装済み**: `.mdx` で `<Moji emoji="語" />` と書くと mojiemoji 画像になる（`src/components/Moji.astro` ＋ 純粋ロジック `src/lib/mojiemoji.ts`）。装飾は text＋出現位置から決定論的に導出（同じ語でも位置で変化・リビルドで不変）。テキストは prop（属性）で渡し Markdown 変換を回避。使い方は `docs/writing-guide.md`、設計は `docs/superpowers/specs/2026-05-25-mojiemoji-mdx-component-design.md`。
+   - **表示モード**: 記事は**既定でプレーン**（`<Moji>` が素の文字）で配信し、mojiemoji 版は `/blog/<slug>/emoji/` に静的生成して記事冒頭のセグメントコントロールから選ぶ。1記事あたり画像が数百枚・URL は全て一意でキャッシュが効かないため、既定で払わせない判断。記事ごとに frontmatter の `defaultMode` で反転できる（`mojiemoji.mdx` は `'emoji'`。mojiemoji 本体のショーケースを兼ねるため）。切替 UI は JS もカスタム CSS も使わず、pico が `[role=group]` と `[role=button][aria-current]` を描く。設計は `docs/superpowers/specs/2026-08-18-plain-emoji-reading-modes-design.md`。
+   - **`src/lib/mojiemoji.ts` の `nextIndex()` はビルド全体で共有されるカウンタ**。呼び出し回数が変わると公開済み全記事の色・フォント・アニメが変わる。`<Moji>` を別実装に差し替えるときは、この関数を呼ばないこと。担保は「変更前の画像 URL 出現列を保存し、変更後と完全一致するか比較する」（本数一致では検出できない）。
 
 ## アーキテクチャ
 
