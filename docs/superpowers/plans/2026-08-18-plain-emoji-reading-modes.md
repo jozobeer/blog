@@ -721,7 +721,82 @@ const alternatePath = reading?.hasAlternate
 />
 ```
 
-- [ ] **Step 3: sitemap から副ページを除外**
+- [ ] **Step 3: slug と副ページ URL の衝突を禁止する**
+
+> **なぜ要るか。** `src/content.config.ts:7` の glob は `**/*.{md,mdx}` でネストを許すので、
+> 記事 id は多セグメントになりうる。`src/content/blog/edge/emoji.md` は id が `edge/emoji`、
+> 主 URL が `/blog/edge/emoji/` となり、**副ページと同じ形**になる。
+> この状態で Step 4 の sitemap filter を当てると、**主ページが sitemap から静かに消える**
+> （ビルドもテストも通るため気づけない）。
+> 1 セグメントの `emoji.md`（`/blog/emoji/`）は副ページの形にならないので安全。
+
+曖昧さを消すには、その形の id を**ビルド時に落とす**のが確実。`src/lib/readingMode.ts` に追加:
+
+```ts
+/** 副ページに使うパスセグメント。記事 id の末尾がこれと衝突すると URL が曖昧になる。 */
+const MODE_SEGMENTS: readonly string[] = ['plain', 'emoji'];
+
+/**
+ * 記事 id が副ページ URL と衝突しないことを確かめる。
+ * `edge/emoji` のような多セグメント id は主 URL が `/blog/edge/emoji/` となり、
+ * 別記事 `edge` の副ページと見分けが付かなくなる。
+ */
+export function assertRoutableSlug(slug: string): void {
+  const segments = slug.split('/');
+  const last = segments[segments.length - 1];
+  if (segments.length > 1 && MODE_SEGMENTS.includes(last)) {
+    throw new Error(
+      `記事 id "${slug}" は表示モードの副ページ URL と衝突します。` +
+        `末尾のディレクトリ名を "${last}" 以外に変えてください。`,
+    );
+  }
+}
+```
+
+`modeRoutes` の先頭で呼ぶ:
+
+```ts
+export function modeRoutes(
+  slug: string,
+  defaultMode: ReadingMode,
+  hasMojiInBody: boolean,
+): ModeRoute[] {
+  assertRoutableSlug(slug);
+  const routes: ModeRoute[] = [{ slug, mode: defaultMode, isDefault: true }];
+```
+
+`src/lib/readingMode.test.ts` の `module contract` の export 一覧に `assertRoutableSlug` を足し、
+`modeRoutes` の describe に次を追加する:
+
+```ts
+  it('rejects a nested slug that collides with a sub-page URL', () => {
+    expect(() => modeRoutes('edge/emoji', 'plain', true)).toThrow(/衝突/);
+    expect(() => modeRoutes('edge/plain', 'plain', true)).toThrow(/衝突/);
+  });
+  it('rejects a colliding slug even when the article has no Moji', () => {
+    expect(() => modeRoutes('edge/emoji', 'plain', false)).toThrow(/衝突/);
+  });
+  it('allows a single-segment slug named after a mode', () => {
+    expect(() => modeRoutes('emoji', 'plain', true)).not.toThrow();
+  });
+```
+
+`module contract` の期待値は次になる（`assertRoutableSlug` が増える）:
+
+```ts
+    expect(Object.keys(readingMode).sort()).toEqual([
+      'DEFAULT_READING_MODE',
+      'alternateMode',
+      'assertRoutableSlug',
+      'hasMoji',
+      'modeHref',
+      'modeRoutes',
+    ]);
+```
+
+テストは 22 + 15 = 37 件になる。
+
+- [ ] **Step 4: sitemap から副ページを除外**
 
 `astro.config.mjs` の `integrations` を差し替える:
 
@@ -731,12 +806,16 @@ const alternatePath = reading?.hasAlternate
 		sitemap({
 			// プレーン／mojiemoji の副ページは同一記事の別表現なので、
 			// canonical 側（/blog/<slug>/）だけを sitemap に載せる。
-			filter: (page) => !/\/blog\/[^/]+\/(plain|emoji)\/$/.test(page),
+			// 記事 id はネストしうる（glob が **/*.{md,mdx}）ので、`/blog/` と
+			// モード名の間は 1 セグメントとは限らない。`.+` で受ける。
+			// 「多セグメントで末尾がモード名」の主ページは assertRoutableSlug が
+			// ビルド時に落とすため、この形にマッチするのは副ページだけになる。
+			filter: (page) => !/\/blog\/.+\/(plain|emoji)\/$/.test(page),
 		}),
 	],
 ```
 
-- [ ] **Step 4: ビルドして canonical を確認**
+- [ ] **Step 5: ビルドして canonical を確認**
 
 ```bash
 npm run build
@@ -762,7 +841,7 @@ Expected:
 - **`dist/about/index.html` → `https://blog.jozo.beer/about/`**（`/blog/undefined/` になっていたら `reading` の任意化が効いていない）
 - `/about` の切替 UI `0` 件、モードの alternate `0` 件、RSS の alternate `1` 件（RSS リンクは `BaseHead.astro:26-31` が全ページに出す既存の出力。実測で 1 件であることを確認済み）
 
-- [ ] **Step 5: sitemap を確認**
+- [ ] **Step 6: sitemap を確認**
 
 ```bash
 grep -o '<loc>[^<]*</loc>' dist/sitemap-0.xml | wc -l
@@ -771,7 +850,7 @@ grep -o '<loc>[^<]*</loc>' dist/sitemap-0.xml
 
 Expected: 8 件のみ（変更前と同数）。`/emoji/` と `/plain/` を含む URL が 1 つも無いこと。
 
-- [ ] **Step 6: RSS が変わっていないことを確認**
+- [ ] **Step 7: RSS が変わっていないことを確認**
 
 ```bash
 echo "item数: $(grep -o '<item>' dist/rss.xml | wc -l)"
@@ -782,7 +861,7 @@ echo "副ページへのlink: $(grep -o '<link>[^<]*/\(emoji\|plain\)/</link>' d
 Expected: item 数 `5`、link 総数 `6`（記事 5 本 + **チャンネル自身の `<link>https://blog.jozo.beer/</link>` 1 本**）、
 副ページへの link `0`。いずれも変更前と同じ値であること。
 
-- [ ] **Step 7: コミット**
+- [ ] **Step 8: コミット**
 
 ```bash
 git add src/components/BaseHead.astro src/layouts/BlogPost.astro astro.config.mjs
