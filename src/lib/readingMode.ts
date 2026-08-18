@@ -34,6 +34,25 @@ export interface ModeRoute {
   isDefault: boolean;
 }
 
+/** 副ページに使うパスセグメント。記事 id の末尾がこれと衝突すると URL が曖昧になる。 */
+const MODE_SEGMENTS: readonly string[] = ['plain', 'emoji'];
+
+/**
+ * 記事 id が副ページ URL と衝突しないことを確かめる。
+ * `edge/emoji` のような多セグメント id は主 URL が `/blog/edge/emoji/` となり、
+ * 別記事 `edge` の副ページと見分けが付かなくなる。
+ */
+export function assertRoutableSlug(slug: string): void {
+  const segments = slug.split('/');
+  const last = segments[segments.length - 1];
+  if (segments.length > 1 && MODE_SEGMENTS.includes(last)) {
+    throw new Error(
+      `記事 id "${slug}" は表示モードの副ページ URL と衝突します。` +
+        `末尾のディレクトリ名を "${last}" 以外に変えてください。`,
+    );
+  }
+}
+
 /**
  * 記事 1 本が生成すべきページ。デフォルトモードは既存 URL `/blog/<slug>/` を保ち、
  * もう片方を `/blog/<slug>/<mode>/` に置く。
@@ -44,6 +63,7 @@ export function modeRoutes(
   defaultMode: ReadingMode,
   hasMojiInBody: boolean,
 ): ModeRoute[] {
+  assertRoutableSlug(slug);
   const routes: ModeRoute[] = [{ slug, mode: defaultMode, isDefault: true }];
   if (hasMojiInBody) {
     const alt = alternateMode(defaultMode);

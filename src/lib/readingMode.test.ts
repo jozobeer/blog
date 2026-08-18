@@ -14,6 +14,7 @@ describe('module contract', () => {
     expect(Object.keys(readingMode).sort()).toEqual([
       'DEFAULT_READING_MODE',
       'alternateMode',
+      'assertRoutableSlug',
       'hasMoji',
       'modeHref',
       'modeRoutes',
@@ -60,6 +61,16 @@ describe('modeRoutes', () => {
     expect(modeRoutes('hello', 'plain', false)).toEqual([
       { slug: 'hello', mode: 'plain', isDefault: true },
     ]);
+  });
+  it('rejects a nested slug that collides with a sub-page URL', () => {
+    expect(() => modeRoutes('edge/emoji', 'plain', true)).toThrow(/衝突/);
+    expect(() => modeRoutes('edge/plain', 'plain', true)).toThrow(/衝突/);
+  });
+  it('rejects a colliding slug even when the article has no Moji', () => {
+    expect(() => modeRoutes('edge/emoji', 'plain', false)).toThrow(/衝突/);
+  });
+  it('allows a single-segment slug named after a mode', () => {
+    expect(() => modeRoutes('emoji', 'plain', true)).not.toThrow();
   });
 });
 
