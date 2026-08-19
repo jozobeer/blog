@@ -33,3 +33,28 @@ const items: { mode: ReadingMode; label: string }[] = [
     }
   </div>
 </nav>
+
+{/* 表示モードの切替は同じ記事の別表現への移動なので、履歴を積まずに置き換える。
+    これが無いと、モードを何度か切り替えた読者は戻るボタンをその回数だけ押さないと
+    元の記事に戻れない。is:inline でバンドルさせず、外部リクエストを増やさない。
+    JS が動かなければ普通のリンクとして今までどおり機能する（履歴は積まれる）。 */}
+<script is:inline>
+	for (const a of document.querySelectorAll(
+		'nav[aria-label="表示モード"] a[href]:not([aria-current])',
+	)) {
+		a.addEventListener('click', (event) => {
+			// 修飾キー・中クリックは「別タブで開く」なので横取りしない。
+			if (
+				event.button !== 0 ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey
+			) {
+				return;
+			}
+			event.preventDefault();
+			location.replace(a.href);
+		});
+	}
+</script>
