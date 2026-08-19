@@ -13,3 +13,14 @@ img[src*="mojiemoji.jozo.beer"] {
   vertical-align: middle;
   transform: translateY(-0.15em);
 }
+
+/* 表示モードの切替を「選択中＝塗り／非選択＝枠線だけ」で示す。
+   pico は [role=button][aria-current] にホバー色を当てるが、dark テーマではホバー色
+   (#02659a) が base (#0172ad) より暗く、選択中のほうが沈んで見えるうえ差も小さい。
+   選択側を明るくするより、非選択側の塗りを外すほうが差が出る。
+   文字色は触らない: pico の白のままなら背景 #13171f に対して 17.95:1 だが、
+   --pico-primary (#0172ad) に変えると 3.43:1 まで落ちて読めなくなる。
+   :not(:hover) を挟むのはホバー時に pico の既定（塗り）へ戻すため。 */
+nav[aria-label="表示モード"] a[role="button"]:not([aria-current]):not(:hover) {
+  --pico-background-color: transparent;
+}
