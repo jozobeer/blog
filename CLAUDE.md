@@ -54,4 +54,8 @@ Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環�
 - **共通 `<head>`**: `src/components/BaseHead.astro` が canonical URL・OGP・Twitter Card・RSS/sitemap link を集約。`global.css` の import もここ。OG/Twitter 画像は `image` prop が渡された時だけ meta を出す（プレースホルダ削除に伴う壊れた `og:image` 参照を防ぐ意図）。
 - **サイト定数**: `src/consts.ts` の `SITE_TITLE` / `SITE_DESCRIPTION` を各ページ・RSS が共有。
 - **配信物**: `src/pages/rss.xml.js`（RSS）、`@astrojs/sitemap` 統合（`/sitemap-index.xml`）。
+- **配信ヘッダー**: `public/_headers`（Cloudflare Pages が読む）。HTML のルートに `Cache-Control: no-transform` を付け、**Cloudflare が HTML を書き換えるのを止めている**。既定では 2 つが注入され、どちらも `dist/` には現れないため**ローカルのビルド検査では検出できない**:
+  - *Email Address Obfuscation*（サインアップ時に自動で有効）が、メールアドレスに見える文字列をリンクに書き換える。除外されるのは `<script>` / `<noscript>` / `<textarea>` / `<xmp>` / `<head>` / 属性だけで、**`<code>` は除外されない**ため、コード例が壊れて JS 無効の読者には `[email protected]` と表示される。
+  - *JavaScript Detections* が全ページに約 920 バイトのビーコンを載せる。Bot Fight Mode 利用中は単独で無効化できず、`js_detection.passed` を使う WAF カスタムルールが無ければ何も強制しない。さらに **HTML の ETag を剥がす**ため、`max-age=0, must-revalidate` の HTML が毎回 `304` にならず全文再送になる。
+  `_headers` は**パス一致**なので、トップレベルにページを増やしたら列挙に追加すること。アセットには意図的に適用していない（Pages の `max-age=14400` を上書きしないため）。**本番の検証はローカルの `dist/` ではなく実際の URL に対して行う。**
 - **執筆ガイド**: `docs/writing-guide.md` は**サイトに公開しない**リポジトリ内メモ（Markdown/MDX 構文と frontmatter ルール）。記事として `src/content/blog/` に置かないこと。
