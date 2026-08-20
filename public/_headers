@@ -1,0 +1,25 @@
+# Cloudflare による HTML の書き換えを止める。
+#
+# 既定では 2 つが注入される:
+#   - Email Address Obfuscation … 記事内の `github.com@evil.com`（攻撃例のコード片）を
+#     メールアドレスと誤認してリンクに書き換え、JS 無効の読者には [email protected] と見せる
+#   - JavaScript Detections … 全ページに約 920 バイトのビーコン。Bot Fight Mode 利用中は
+#     単独で無効化できず、WAF カスタムルールが無ければ何も強制しない。さらに HTML の ETag を
+#     剥がすため、max-age=0 の HTML が毎回まるごと再ダウンロードされる
+#
+# Cache-Control に no-transform があると Cloudflare はどちらも適用しない（公式仕様）。
+# 値は Pages の既定 `public, max-age=0, must-revalidate` に no-transform を足しただけ。
+#
+# アセット（/_astro/* や画像）には意図的に適用しない。Pages が付ける max-age=14400 を
+# 上書きしてしまうため。HTML のルートを増やしたらここにも追加すること。
+/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/about/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/blog/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/blog/*
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
