@@ -1,0 +1,135 @@
+---
+title: 'JS をゼロにしたつもりが、Cloudflare が配っていた'
+description: 'ビルド成果物の <script> は 0 個。それでも読者が受け取るページには JS が載っていました。Cloudflare が既定で HTML を書き換えていた話と、no-transform で止めるまで。'
+pubDate: 'Aug 21 2026'
+author: hondazn
+---
+
+このブログは<Moji emoji="閲覧" />の<Moji emoji="速さ" />を<Moji emoji="最優先" />にしていて、クライアント JS を<Moji emoji="ほぼ" />配りません。ビルド<Moji emoji="成果" />物を `grep` して `<script>` が<Moji emoji="ゼロ" />であることも<Moji emoji="確認" />していました。
+
+ところが<Moji emoji="本番" />の<Moji emoji="ページ" />には JS が<Moji emoji="載って" />いました。Cloudflare が<Moji emoji="勝手" />に<Moji emoji="入れて" />いたものです。<Moji emoji="手元" />で<Moji emoji="確かめ" />た<Moji emoji="順" />に書きます。
+
+---
+
+## 気づいたきっかけ
+
+<Moji emoji="記事" />の<Moji emoji="表示" /><Moji emoji="モード" />を切り替える<Moji emoji="機能" />を作って、デプロイした<Moji emoji="あと" />の<Moji emoji="確認" />でした。切替 UI を<Moji emoji="持た" />ないはずの `/about` に、スクリプトが<Moji emoji="1つ" />ある。<Moji emoji="手元" />の<Moji emoji="成果" />物には<Moji emoji="無い" />ものです。
+
+```sh
+# 手元のビルド
+$ grep -ro '<script' dist/ | wc -l
+0
+
+# 本番
+$ curl -s https://blog.jozo.beer/about/ | grep -o '<script' | wc -l
+1
+```
+
+<Moji emoji="同じ" />ファイルを<Moji emoji="配って" />いるつもりで、<Moji emoji="違う" />ものが<Moji emoji="届いて" />いました。
+
+## 入っていたもの
+
+<Moji emoji="2種類" />ありました。
+
+| 注入 | 対象 | 中身 |
+|---|---|---|
+| Email Address Obfuscation | メールらしき<Moji emoji="文字" />を含む<Moji emoji="ページ" /> | <Moji emoji="外部" />スクリプト `email-decode.min.js` を1本 |
+| JavaScript Detections | <Moji emoji="全" /><Moji emoji="ページ" /> | インライン<Moji emoji="およそ" /> 920 バイト |
+
+どちらも<Moji emoji="自分" />で<Moji emoji="有効" />にした<Moji emoji="覚え" />がありません。<Moji emoji="片方" />は<Moji emoji="サイン" />アップ<Moji emoji="時" />に<Moji emoji="自動" />で<Moji emoji="有効" />になる<Moji emoji="設定" />でした。
+
+## 1つめ — コード例が書き換えられていた
+
+Email Address Obfuscation は、<Moji emoji="本文" />の<Moji emoji="メール" />アドレスを<Moji emoji="リンク" />に<Moji emoji="変え" />て<Moji emoji="収集" />ボットから<Moji emoji="隠す" /><Moji emoji="機能" />です。<Moji emoji="親切" />な<Moji emoji="機能" />に<Moji emoji="見え" />ます。
+
+<Moji emoji="問題" />は、このブログに<Moji emoji="実在" />の<Moji emoji="アドレス" />が<Moji emoji="1つ" />も<Moji emoji="無い" />ことでした。<Moji emoji="全" />ソースを<Moji emoji="検索" />して<Moji emoji="一致" />したのは、<Moji emoji="別" /><Moji emoji="記事" />に<Moji emoji="書い" />たこれだけです。
+
+```md
+<code>github.com@evil.com</code> のような見た目の似たホストが弾かれます
+```
+
+<Moji emoji="攻撃" /><Moji emoji="例" />として<Moji emoji="出し" />た<Moji emoji="作り" />物の<Moji emoji="文字" />で、`<code>` の<Moji emoji="中" />にあります。Cloudflare はこれを<Moji emoji="メール" />アドレスと<Moji emoji="判定" />して、こう<Moji emoji="書き換え" />ていました。
+
+```html
+<a href="/cdn-cgi/l/email-protection" class="__cf_email__"
+   data-cfemail="7a1d130e120f18541915173a1f0c131654191517">[email&#160;protected]</a>
+```
+
+<Moji emoji="コード" /><Moji emoji="例" />が<Moji emoji="リンク" />になり、JS を<Moji emoji="切って" />いる<Moji emoji="読者" />には `[email protected]` と<Moji emoji="表示" />されます。<Moji emoji="攻撃" /><Moji emoji="例" />を<Moji emoji="見せ" />たい<Moji emoji="文章" />で、<Moji emoji="肝心" />の<Moji emoji="文字" />が<Moji emoji="読め" />ない。
+
+[<Moji emoji="公式" /><Moji emoji="ドキュ" /><Moji emoji="メント" />](https://developers.cloudflare.com/waf/tools/scrape-shield/email-address-obfuscation/)に<Moji emoji="除外" />される<Moji emoji="場所" />の<Moji emoji="一覧" />があります。`<script>` `<noscript>` `<textarea>` `<xmp>` `<head>`、それと HTML <Moji emoji="属性" />。
+
+`<code>` は<Moji emoji="入って" />いません。<Moji emoji="技術" /><Moji emoji="記事" />が<Moji emoji="メール" />アドレスを<Moji emoji="コード" />として<Moji emoji="見せる" />と、<Moji emoji="必ず" /><Moji emoji="踏み" />ます。
+
+## 2つめ — ETag が剥がされていた
+
+もう<Moji emoji="片方" />の JavaScript Detections は、ボット<Moji emoji="判定" />のための<Moji emoji="ビーコン" />です。<Moji emoji="全" /><Moji emoji="ページ" />に<Moji emoji="およそ" /> 920 バイト<Moji emoji="載り" />ます。
+
+[<Moji emoji="公式" />の<Moji emoji="記述" />](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/javascript-detections/)を<Moji emoji="読む" />と、<Moji emoji="2つ" /><Moji emoji="分かり" />ました。
+
+<Moji emoji="1つ" />は、Bot Fight Mode を<Moji emoji="使って" />いる<Moji emoji="間" />はこれを<Moji emoji="単独" />で<Moji emoji="無効" />にできないこと。もう<Moji emoji="1つ" />は、これ<Moji emoji="だけ" />では<Moji emoji="何も" /><Moji emoji="強制" />しないこと。`js_detection.passed` を<Moji emoji="使う" /> WAF カスタムルールを<Moji emoji="別に" />作って<Moji emoji="初めて" /><Moji emoji="効き" />ます。そのルールが<Moji emoji="無い" />なら、<Moji emoji="全" /><Moji emoji="ページ" />に 920 バイト<Moji emoji="載る" />だけです。
+
+<Moji emoji="効き" />めが<Moji emoji="無い" />のは<Moji emoji="まだ" />いいとして、<Moji emoji="実害" />のほうが<Moji emoji="大きい" />ものでした。<Moji emoji="同じ" /><Moji emoji="文書" />にこう<Moji emoji="書い" />てあります。
+
+> Enabling JavaScript Detections (JSD) will strip ETags from HTML responses where JSD is injected.
+
+<Moji emoji="実測" />すると、そのとおりでした。
+
+```sh
+# HTML には ETag が無い
+$ curl -sI https://blog.jozo.beer/blog/gh-img/ | grep -iE 'etag|cache-control'
+cache-control: public, max-age=0, must-revalidate
+
+# 同じサイトのアセットには付いている
+$ curl -sI https://blog.jozo.beer/favicon.svg | grep -iE 'etag|cache-control'
+cache-control: public, max-age=14400, must-revalidate
+etag: "f46e90f224a1df98b3114a0c9c8956da"
+```
+
+HTML は `max-age=0, must-revalidate` なので、<Moji emoji="毎回" />サーバに<Moji emoji="問い" />合わせる<Moji emoji="設計" />です。ETag があれば `304 Not Modified` で<Moji emoji="済み" />ます。<Moji emoji="剥がさ" />れていると、<Moji emoji="問い" />合わせるたびに<Moji emoji="本文" />を<Moji emoji="丸ごと" /><Moji emoji="送り" />直させられます。
+
+<Moji emoji="一番" /><Moji emoji="長い" /><Moji emoji="記事" />で gzip <Moji emoji="後" /> 35KB。<Moji emoji="再" /><Moji emoji="訪問" />のたびに、これを<Moji emoji="毎回" />です。<Moji emoji="速さ" />を<Moji emoji="指標" />にしているサイトで、<Moji emoji="一番" /><Moji emoji="痛い" /><Moji emoji="失点" />でした。
+
+## 止め方
+
+<Moji emoji="ダッシュ" />ボードで<Moji emoji="個別" />に<Moji emoji="切る" />こともできますが、JavaScript Detections は Bot Fight Mode ごと<Moji emoji="切る" />ことになります。<Moji emoji="設定" />が<Moji emoji="手元" />の<Moji emoji="リポ" />ジトリに<Moji emoji="残ら" />ないのも<Moji emoji="気持ち" />が<Moji emoji="悪い" />。
+
+<Moji emoji="両方" />とも `Cache-Control` に `no-transform` があれば<Moji emoji="適用" />されません。これは<Moji emoji="公式" />に<Moji emoji="明記" />されています。Cloudflare Pages は `_headers` <Moji emoji="ファイル" />を<Moji emoji="読む" />ので、<Moji emoji="リポ" />ジトリの<Moji emoji="中" />で<Moji emoji="完結" />します。
+
+```
+/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/about/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/blog/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/blog/*
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+```
+
+<Moji emoji="値" />は Pages の<Moji emoji="既定" />に `no-transform` を<Moji emoji="足し" />ただけです。アセットには<Moji emoji="わざと" /><Moji emoji="当てて" />いません。`/*` で<Moji emoji="一括" />に<Moji emoji="すると" />、Pages が<Moji emoji="付ける" /> `max-age=14400` を<Moji emoji="上書き" />して<Moji emoji="画像" />の<Moji emoji="キャッ" />シュを<Moji emoji="潰し" />ます。
+
+<Moji emoji="代償" />として Cloudflare の HTML・<Moji emoji="画像" /><Moji emoji="変換" />が<Moji emoji="全部" /><Moji emoji="止まり" />ます。Rocket Loader、Polish、Mirage。このサイトは CSS を<Moji emoji="ビルド" /><Moji emoji="時" />にインライン<Moji emoji="化" />し、<Moji emoji="画像" />も webp に<Moji emoji="変換" />済みなので、<Moji emoji="失う" />ものはありませんでした。
+
+## 結果
+
+| | <Moji emoji="変更" /><Moji emoji="前" /> | <Moji emoji="変更" /><Moji emoji="後" /> |
+|---|---|---|
+| <Moji emoji="全" /><Moji emoji="ページ" />のビーコン | <Moji emoji="およそ" /> 920 バイト | 0 |
+| <Moji emoji="外部" />スクリプト<Moji emoji="要求" /> | 1本 | 0 |
+| <Moji emoji="記事" />の<Moji emoji="コード" /><Moji emoji="例" /> | `[email protected]` | `github.com@evil.com` |
+| HTML の ETag | <Moji emoji="無し" /> | <Moji emoji="復活" />（`304` を<Moji emoji="確認" />） |
+| アセットの<Moji emoji="キャッ" />シュ | `max-age=14400` | <Moji emoji="そのまま" /> |
+
+<Moji emoji="調べ" />はじめた<Moji emoji="動機" />は「JS を<Moji emoji="増やし" />たくない」でした。<Moji emoji="実際" />に<Moji emoji="一番" /><Moji emoji="効い" />たのは、ETag が<Moji emoji="戻って" /><Moji emoji="再" /><Moji emoji="訪問" />が `304` で<Moji emoji="済む" />ようになったことです。
+
+## 手元の成果物を見ても、本番は分からない
+
+<Moji emoji="今回" />の<Moji emoji="教訓" />はこれに<Moji emoji="尽き" />ます。
+
+`dist/` の `<script>` を<Moji emoji="数え" />ても、<Moji emoji="読者" />が<Moji emoji="受け取る" /><Moji emoji="ページ" />のことは<Moji emoji="分かり" />ません。CDN は<Moji emoji="配る" /><Moji emoji="途中" />で HTML を<Moji emoji="書き換え" />ます。<Moji emoji="良かれ" />と<Moji emoji="思って" />、<Moji emoji="既定" />で。
+
+<Moji emoji="検証" />は<Moji emoji="実際" />の URL に `curl` を<Moji emoji="投げる" />ところまで<Moji emoji="やる" />。それだけの<Moji emoji="話" />でした。
