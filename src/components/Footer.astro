@@ -3,5 +3,12 @@ const today = new Date();
 ---
 
 <footer>
-	<p>&copy; {today.getFullYear()} JOZO&apos;s blog</p>
+	<nav aria-label="フッター">
+		<ul>
+			<li><a href="/blog/">記事</a></li>
+			<li><a href="/about/">このブログについて</a></li>
+			<li><a href="/rss.xml">RSS</a></li>
+		</ul>
+	</nav>
+	<small>&copy; {today.getFullYear()} JOZO&apos;s blog</small>
 </footer>

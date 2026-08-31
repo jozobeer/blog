@@ -1,13 +1,9 @@
 ---
-import Layout from '../layouts/BlogPost.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<Layout
-	title="このブログについて"
-	description="JOZO's blog について。"
-	pubDate={new Date('2026-05-24')}
-	author="jozo"
->
+<BaseLayout title="このブログについて" description="JOZO's blog について。">
+	<h1>このブログについて</h1>
 	<p>JOZO&apos;s blog です。</p>
 	<p>記事の閲覧速度と楽しい見た目を大切にしていきたいと思います。</p>
-</Layout>
+</BaseLayout>

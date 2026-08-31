@@ -1,77 +1,101 @@
 ---
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
-import BaseHead from '../components/BaseHead.astro';
-import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
-import Header from '../components/Header.astro';
 import ReadingModeSwitch from '../components/ReadingModeSwitch.astro';
+import BaseLayout from './BaseLayout.astro';
+import type { PostNeighbors } from '../lib/postNeighbors';
 import { alternateMode, modeHref, type ReadingContext } from '../lib/readingMode';
 
 type Props = CollectionEntry<'blog'>['data'] & {
-	/** 記事ページのみ渡る。/about のような記事以外の利用では undefined。 */
-	reading?: ReadingContext;
+	reading: ReadingContext;
+	neighbors: PostNeighbors;
 };
 
-const { title, description, pubDate, updatedDate, heroImage, author, reading } =
-	Astro.props;
+const {
+	title,
+	description,
+	pubDate,
+	updatedDate,
+	heroImage,
+	author,
+	reading,
+	neighbors,
+} = Astro.props;
 
-// reading が無い利用（/about）では canonical を上書きせず、BaseHead の自己参照に任せる。
-const canonicalPath = reading
-	? modeHref(reading.slug, reading.defaultMode, reading.defaultMode)
-	: undefined;
-const alternatePath = reading?.hasAlternate
+// 副ページ（/emoji/ 側）も canonical は記事の既定モードに向ける。
+const canonicalPath = modeHref(reading.slug, reading.defaultMode, reading.defaultMode);
+const alternatePath = reading.hasAlternate
 	? modeHref(reading.slug, alternateMode(reading.mode), reading.defaultMode)
 	: undefined;
 ---
 
-<html lang="ja" data-theme="dark">
-	<head>
-		<BaseHead
-			title={title}
-			description={description}
-			image={heroImage}
-			canonicalPath={canonicalPath}
-			alternatePath={alternatePath}
-		/>
-	</head>
-
-	<body>
-		<Header />
-		<main>
-			<article>
-				<div>
-					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
-				</div>
-				<div>
-					<div>
-						<div>
-							<FormattedDate date={pubDate} />
-							{
-								updatedDate && (
-									<div>
-										最終更新: <FormattedDate date={updatedDate} />
-									</div>
-								)
-							}
-						</div>
-						<p>author: {author}</p>
-						<h1>{title}</h1>
-						<hr />
-						{
-							reading?.hasAlternate && (
-								<ReadingModeSwitch
-									slug={reading.slug}
-									mode={reading.mode}
-									defaultMode={reading.defaultMode}
-								/>
-							)
-						}
-					</div>
-					<slot />
-				</div>
-			</article>
-		</main>
-		<Footer />
-	</body>
-</html>
+<BaseLayout
+	title={title}
+	description={description}
+	image={heroImage}
+	canonicalPath={canonicalPath}
+	alternatePath={alternatePath}
+>
+	<article>
+		<header>
+			<hgroup>
+				<h1>{title}</h1>
+				<p>{description}</p>
+			</hgroup>
+			<p>
+				<FormattedDate date={pubDate} /> · {author}
+				{
+					updatedDate && (
+						<Fragment> · 最終更新 <FormattedDate date={updatedDate} /></Fragment>
+					)
+				}
+			</p>
+			{
+				reading.hasAlternate && (
+					<ReadingModeSwitch
+						slug={reading.slug}
+						mode={reading.mode}
+						defaultMode={reading.defaultMode}
+					/>
+				)
+			}
+		</header>
+		{
+			heroImage && (
+				<figure>
+					<Image width={1020} height={510} src={heroImage} alt="" />
+				</figure>
+			)
+		}
+		<slot />
+		{
+			(neighbors.older || neighbors.newer) && (
+				<footer>
+					{/* 片側が無いときも空の <ul> を残す。pico の nav は space-between なので、
+					    残った 1 本が反対側へ寄ってしまうのを防ぐ。 */}
+					<nav aria-label="前後の記事">
+						<ul>
+							{neighbors.older && (
+								<li>
+									<a href={`/blog/${neighbors.older.id}/`} rel="prev">
+										← 前の記事
+									</a>
+								</li>
+							)}
+						</ul>
+						<ul>
+							{neighbors.newer && (
+								<li>
+									<a href={`/blog/${neighbors.newer.id}/`} rel="next">
+										次の記事 →
+									</a>
+								</li>
+							)}
+						</ul>
+					</nav>
+				</footer>
+			)
+		}
+	</article>
+</BaseLayout>

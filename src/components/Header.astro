@@ -4,12 +4,13 @@ import HeaderLink from './HeaderLink.astro';
 ---
 
 <header>
-	<nav>
-		<p><a href="/">{SITE_TITLE}</a></p>
-		<div>
-			<HeaderLink href="/">Home</HeaderLink>
-			<HeaderLink href="/blog">Blog</HeaderLink>
-			<HeaderLink href="/about">About</HeaderLink>
-		</div>
+	<nav aria-label="サイト">
+		<ul>
+			<li><strong><HeaderLink href="/">{SITE_TITLE}</HeaderLink></strong></li>
+		</ul>
+		<ul>
+			<li><HeaderLink href="/blog/">記事</HeaderLink></li>
+			<li><HeaderLink href="/about/">このブログについて</HeaderLink></li>
+		</ul>
 	</nav>
 </header>

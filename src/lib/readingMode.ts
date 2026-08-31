@@ -3,10 +3,7 @@ export type ReadingMode = 'plain' | 'emoji';
 /** frontmatter で指定が無い記事の既定モード。 */
 export const DEFAULT_READING_MODE: ReadingMode = 'plain';
 
-/**
- * レイアウトへ渡す表示モードの文脈。BlogPost は /about でも使われるため、
- * この 4 つは「全部そろうか、まったく無いか」のどちらかにする。
- */
+/** 記事レイアウトが切替 UI と canonical / alternate を組み立てるのに要る文脈。 */
 export interface ReadingContext {
   slug: string;
   /** いま表示しているモード */

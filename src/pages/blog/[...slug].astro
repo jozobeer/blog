@@ -3,6 +3,7 @@ import { type CollectionEntry, getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 import Moji from '../../components/Moji.astro';
 import MojiPlain from '../../components/MojiPlain.astro';
+import { neighborsById, type PostNeighbors } from '../../lib/postNeighbors';
 import {
 	DEFAULT_READING_MODE,
 	hasMoji,
@@ -12,6 +13,15 @@ import {
 
 export async function getStaticPaths() {
 	const posts = await getCollection('blog');
+	const neighbors = neighborsById(
+		posts.map((post) => ({
+			id: post.id,
+			title: post.data.title,
+			pubDate: post.data.pubDate,
+		})),
+	);
+	// posts の反復順は変えない。順序が変わると mojiemoji の採番がずれ、
+	// 公開済み全記事の色・フォント・アニメが変わる。
 	return posts.flatMap((post) => {
 		const defaultMode = post.data.defaultMode ?? DEFAULT_READING_MODE;
 		const routes = modeRoutes(post.id, defaultMode, hasMoji(post.body));
@@ -25,6 +35,7 @@ export async function getStaticPaths() {
 					defaultMode,
 					hasAlternate: routes.length > 1,
 				},
+				neighbors: neighbors.get(post.id) ?? {},
 			},
 		}));
 	});
@@ -33,12 +44,13 @@ export async function getStaticPaths() {
 type Props = {
 	post: CollectionEntry<'blog'>;
 	reading: ReadingContext;
+	neighbors: PostNeighbors;
 };
 
-const { post, reading } = Astro.props;
+const { post, reading, neighbors } = Astro.props;
 const { Content } = await render(post);
 ---
 
-<BlogPost {...post.data} reading={reading}>
+<BlogPost {...post.data} reading={reading} neighbors={neighbors}>
 	<Content components={{ Moji: reading.mode === 'emoji' ? Moji : MojiPlain }} />
 </BlogPost>

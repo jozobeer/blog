@@ -23,3 +23,10 @@
 
 /blog/*
   Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+# 直接 /404.html を開いたときだけ効く。存在しない URL への 404 応答はリクエストパス
+# （/nope など）で照合されるので一致しない。/* を足せば一致するが、アセットの
+# max-age=14400 まで上書きしてしまう。代わりに 404 の本文にメールアドレス風の
+# 文字列を置かないことで実害を避けている。
+/404.html
+  Cache-Control: public, max-age=0, must-revalidate, no-transform

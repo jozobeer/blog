@@ -3,12 +3,20 @@ import type { HTMLAttributes } from 'astro/types';
 
 type Props = HTMLAttributes<'a'>;
 
-const { href, class: className, ...props } = Astro.props;
-const pathname = Astro.url.pathname.replace(import.meta.env.BASE_URL, '');
-const subpath = pathname.match(/[^\/]+/g);
-const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
+const { href, ...props } = Astro.props;
+
+/** 末尾スラッシュの有無で現在地判定が外れないよう揃える。 */
+const withSlash = (path: string) => (path.endsWith('/') ? path : `${path}/`);
+
+const here = withSlash(Astro.url.pathname);
+const target = withSlash(String(href));
+
+// "/" は全パスの接頭辞なので前方一致から外す。外さないとロゴが常に現在地になる。
+// 記事ページで「記事」を示すのは "true"（このセクションの中にいる）。"page" は当のページ自身だけ。
+const isSection = target !== '/' && here.startsWith(target);
+const current = here === target ? 'page' : isSection ? 'true' : undefined;
 ---
 
-<a href={href} class:list={[className, { active: isActive }]} {...props}>
+<a href={href} aria-current={current} {...props}>
 	<slot />
 </a>

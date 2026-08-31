@@ -24,3 +24,22 @@ img[src*="mojiemoji.jozo.beer"] {
 nav[aria-label="表示モード"] a[role="button"]:not([aria-current]):not(:hover) {
   --pico-background-color: transparent;
 }
+
+/* 本文の行長を詰める。pico は 1024px 以上で本文枠を 950 → 1200 → 1450px と広げる設計で、
+   1280px 幅だと 1 行 55〜60 字になり可読の目安 35〜45 字を超える。
+   この max-width は breakpoint ごとのベタ書きで変数化されていない（pico.classless.css:601-645）ため、
+   マークアップでは解けず CSS で上書きするしかない。44rem ≒ 704px ≒ 日本語 44 字。
+   1024px 未満は pico の 510 / 700px が既に適切なので触らない。 */
+@media (min-width: 1024px) {
+  body > header,
+  body > main,
+  body > footer {
+    max-width: 44rem;
+  }
+}
+
+/* 表示モードの切替が全幅に伸びるのを止める。pico の [role=group] は width:100%（同 :1852-1862）で、
+   本文枠いっぱいに広がった切替 UI が記事タイトルより目立ってしまう。 */
+nav[aria-label="表示モード"] [role="group"] {
+  width: auto;
+}
