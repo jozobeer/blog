@@ -1,0 +1,91 @@
+---
+// 一時的な実機診断。記事ページで 1 秒ごとに生存状態を localStorage へ書き、
+// ハードキルされた場合は最後の状態が alive=true のまま残る。
+// /diag の「記事ページの記録」で回収する。原因確定後に削除する。
+---
+
+<script is:inline>
+	(() => {
+		const KEY = 'articleDiag';
+		const read = () => {
+			try {
+				return JSON.parse(localStorage.getItem(KEY) || 'null');
+			} catch {
+				return null;
+			}
+		};
+		const write = (v) => {
+			try {
+				localStorage.setItem(KEY, JSON.stringify(v));
+			} catch {}
+		};
+
+		const state = read() || { log: [], last: null };
+		if (state.last && state.last.alive) {
+			state.log.push({ t: Date.now(), msg: 'PREV DIED: ' + JSON.stringify(state.last) });
+			state.log = state.log.slice(-30);
+			write(state);
+		}
+
+		let longTasks = 0;
+		let maxLong = 0;
+		try {
+			new PerformanceObserver((list) => {
+				for (const e of list.getEntries()) {
+					longTasks++;
+					if (e.duration > maxLong) maxLong = Math.round(e.duration);
+				}
+			}).observe({ entryTypes: ['longtask'] });
+		} catch {}
+
+		addEventListener('pageshow', (e) => {
+			state.log.push({ t: Date.now(), msg: `pageshow persisted=${!!e.persisted}` });
+			state.log = state.log.slice(-30);
+			write(state);
+		});
+
+		// リサイクルで src を戻すたびに load が再発火するので、初回だけ印を付ける。
+		addEventListener(
+			'load',
+			(e) => {
+				const t = e.target;
+				if (t && t.tagName === 'IMG' && (t.currentSrc || t.src).includes('mojiemoji.jozo.beer/emoji/')) {
+					t.dataset.hit = '1';
+				}
+			},
+			true,
+		);
+
+		const started = Date.now();
+		const moji = () => [...document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')];
+		const snap = (alive, extra) => ({
+			slug: location.pathname,
+			alive,
+			elapsed: Math.round((Date.now() - started) / 1000),
+			scrollY: Math.round(scrollY),
+			docH: document.documentElement.scrollHeight,
+			moji: moji().length,
+			mojiLoaded: moji().filter((i) => i.complete && i.naturalWidth > 1).length,
+			mojiHits: document.querySelectorAll('img[data-hit]').length,
+			imgs: document.images.length,
+			longTasks,
+			maxLong,
+			...extra,
+		});
+
+		state.last = snap(true);
+		write(state);
+
+		setInterval(() => {
+			state.last = snap(true);
+			write(state);
+		}, 1000);
+
+		addEventListener('pagehide', (e) => {
+			state.last = snap(false, { event: 'pagehide', persisted: !!e.persisted });
+			state.log.push({ t: Date.now(), msg: `pagehide persisted=${!!e.persisted}` });
+			state.log = state.log.slice(-30);
+			write(state);
+		});
+	})();
+</script>

@@ -21,6 +21,8 @@
   <div>n=<span id="n">-</span> / ページ残り <span id="pages">-</span> / 経過 <span id="elapsed">0</span>s / scrollY <span id="y">0</span> / ロード済 <span id="loaded">0</span></div>
 </div>
 <p id="prev">記録なし</p>
+<h2 style="font-size:1rem">記事ページの記録</h2>
+<pre id="articleLog" style="white-space:pre-wrap;border:1px solid #444;border-radius:6px;padding:8px;font-size:12px">なし</pre>
 <p class="muted">
   起動すると n 枚の GIF を読み込み、自動で最後までスクロールし、<b>別の n 枚ずつを指定ページ数だけ連続で開きます</b>（記事の連続閲覧の再現）。
   途中でフリーズ・再読み込みしたら、このページをもう一度開いて上の記録を控えてください。<br>
@@ -34,6 +36,7 @@
 
 <script>
   const q = new URLSearchParams(location.search);
+  const autorun = q.has('n');
   const n = Math.min(1000, Math.max(10, Number(q.get('n')) || 300));
   const pages = Math.min(20, Math.max(1, Number(q.get('pages')) || 1));
   const scrollOn = q.get('scroll') !== '0';
@@ -67,6 +70,16 @@
   document.getElementById('n').textContent = n + ' (' + mode + (recycle ? ', recycle' : '') + ')';
   document.getElementById('pages').textContent = pages;
   renderLog();
+  renderArticleLog();
+
+  function renderArticleLog() {
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem('articleDiag') || 'null'); } catch {}
+    const lines = [];
+    if (st && st.last) lines.push('LAST: ' + JSON.stringify(st.last));
+    if (st && st.log) for (const e of st.log.slice(-12)) lines.push(new Date(e.t).toLocaleTimeString() + ' ' + e.msg);
+    document.getElementById('articleLog').textContent = lines.join('\n') || 'なし';
+  }
 
   const started = Date.now();
   const panel = {
@@ -83,35 +96,37 @@
 
   log('load');
 
-  fetch('/blog/macos-app-debug-utm-vm/emoji/')
-    .then((r) => r.text())
-    .then((html) => {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const urls = [...doc.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')]
-        .map((i) => i.getAttribute('src'))
-        .filter(Boolean)
-        .slice(start, start + n);
-      const frag = document.createDocumentFragment();
-      for (const raw of urls) {
-        const u = new URL(raw);
-        if (mode === 'png') {
-          u.searchParams.delete('animation');
-          u.searchParams.set('size', pngSize + 'x' + pngSize);
+  if (autorun) {
+    fetch('/blog/macos-app-debug-utm-vm/emoji/')
+      .then((r) => r.text())
+      .then((html) => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const urls = [...doc.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')]
+          .map((i) => i.getAttribute('src'))
+          .filter(Boolean)
+          .slice(start, start + n);
+        const frag = document.createDocumentFragment();
+        for (const raw of urls) {
+          const u = new URL(raw);
+          if (mode === 'png') {
+            u.searchParams.delete('animation');
+            u.searchParams.set('size', pngSize + 'x' + pngSize);
+          }
+          const img = document.createElement('img');
+          img.src = u.href;
+          img.width = 24;
+          img.height = 24;
+          img.alt = '';
+          if (lazy) img.loading = 'lazy';
+          frag.append(img);
         }
-        const img = document.createElement('img');
-        img.src = u.href;
-        img.width = 24;
-        img.height = 24;
-        img.alt = '';
-        if (lazy) img.loading = 'lazy';
-        frag.append(img);
-      }
-      document.getElementById('imgs').append(frag);
-      log(`injected ${urls.length} imgs`);
-      if (recycle) injectRecycler();
-      if (scrollOn) autoScroll();
-      else scheduleNext();
-    });
+        document.getElementById('imgs').append(frag);
+        log(`injected ${urls.length} imgs`);
+        if (recycle) injectRecycler();
+        if (scrollOn) autoScroll();
+        else scheduleNext();
+      });
+  }
 
   function injectRecycler() {
     if (!('IntersectionObserver' in window)) return;
