@@ -61,8 +61,10 @@
 
 		const started = Date.now();
 		let recycleOff = false;
+		let staticMode = false;
 		try {
 			recycleOff = localStorage.getItem('norecycle') === '1';
+			staticMode = localStorage.getItem('static') === '1';
 		} catch {}
 		const moji = () => [...document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')];
 		const mojiRes = () =>
@@ -79,7 +81,7 @@
 			mojiLoaded: moji().filter((i) => i.complete && i.naturalWidth > 1).length,
 			mojiHits: document.querySelectorAll('img[data-hit]').length,
 			mojiRes: mojiRes(),
-			recycle: recycleOff ? 'off' : 'on',
+			recycle: staticMode ? 'static' : recycleOff ? 'off' : 'on',
 			imgs: document.images.length,
 			longTasks,
 			maxLong,

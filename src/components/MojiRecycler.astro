@@ -11,13 +11,26 @@
 
 <script is:inline>
 	(() => {
-		// 一時的な診断スイッチ: ?norecycle=1 または localStorage.norecycle=1 でリサイクルを止める。
+		// 一時的な診断スイッチ。localStorage / クエリで挙動を切り替える。
+		//   static=1  … 全画像を静止 PNG に差し替える（GIF デコードの寄与を見る）
+		//   norecycle=1 … リサイクルを止める
+		let staticMode = false;
 		let off = location.search.includes('norecycle');
 		try {
+			staticMode = location.search.includes('static') || localStorage.getItem('static') === '1';
 			off = off || localStorage.getItem('norecycle') === '1';
 		} catch {}
-		if (off) return;
 		const imgs = document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]');
+		if (staticMode) {
+			for (const img of imgs) {
+				const u = new URL(img.src);
+				u.searchParams.delete('animation');
+				u.searchParams.set('size', '32x32');
+				img.src = u.href;
+			}
+			return;
+		}
+		if (off) return;
 		if (!imgs.length || !('IntersectionObserver' in window)) return;
 
 		const BLANK =

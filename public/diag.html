@@ -22,6 +22,7 @@
 </div>
 <p id="prev">記録なし</p>
 <p><button id="toggleRecycle" type="button">リサイクル: -</button>
+  <button id="toggleStatic" type="button">静止画: -</button>
   <span class="muted">（現在の設定で記事を読む。A/B の切り替え用）</span></p>
 <h2 style="font-size:1rem">記事ページの記録</h2>
 <pre id="articleLog" style="white-space:pre-wrap;border:1px solid #444;border-radius:6px;padding:8px;font-size:12px">なし</pre>
@@ -97,6 +98,21 @@
     syncToggle();
   });
   syncToggle();
+
+  const toggleStatic = document.getElementById('toggleStatic');
+  const syncStatic = () => {
+    let on = false;
+    try { on = localStorage.getItem('static') === '1'; } catch {}
+    toggleStatic.textContent = '静止画: ' + (on ? 'ON（GIF を使わない）' : 'OFF');
+  };
+  toggleStatic.addEventListener('click', () => {
+    try {
+      if (localStorage.getItem('static') === '1') localStorage.removeItem('static');
+      else localStorage.setItem('static', '1');
+    } catch {}
+    syncStatic();
+  });
+  syncStatic();
 
   const started = Date.now();
   const panel = {
