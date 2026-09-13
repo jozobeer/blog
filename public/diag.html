@@ -7,7 +7,7 @@
 <style>
   body { background: #13171f; color: #c2c7d0; font: 16px/1.6 sans-serif; margin: 16px; }
   h1 { font-size: 1.2rem; }
-  #prev { padding: 8px; border: 1px solid #444; border-radius: 6px; white-space: pre-wrap; }
+  #prev { padding: 8px; border: 1px solid #444; border-radius: 6px; white-space: pre-wrap; font-size: 14px; }
   #imgs { margin-top: 16px; }
   #imgs img { vertical-align: middle; }
   a { color: #6cc; }
@@ -18,42 +18,70 @@
 <body>
 <h1>mojiemoji メモリ診断（一時ページ）</h1>
 <div id="panel">
-  <div>n=<span id="n">-</span> / 経過 <span id="elapsed">0</span>s / scrollY <span id="y">0</span> / ロード済 <span id="loaded">0</span> / 起動 <span id="runs">1</span>回目</div>
+  <div>n=<span id="n">-</span> / ページ残り <span id="pages">-</span> / 経過 <span id="elapsed">0</span>s / scrollY <span id="y">0</span> / ロード済 <span id="loaded">0</span></div>
 </div>
-<p id="prev">前回の記録なし</p>
+<p id="prev">記録なし</p>
 <p class="muted">
-  下に n 枚の mojiemoji 画像を読み込みます（lazy なし・全枚ロード）。ゆっくり最後までスクロールし、
-  ページが再読み込みされたり固まったりしたら、上の「前回の記録」を控えてください。<br>
-  n を変えて試す: <a href="?n=150">150</a> <a href="?n=300">300</a> <a href="?n=450">450</a>
-  <a href="?n=600">600</a> / 静止画比較: <a href="?n=600&mode=png">600 png</a>
-  <a href="?n=600&mode=png&size=32">600 png 32px</a>
+  起動すると n 枚の GIF を読み込み、自動で最後までスクロールし、<b>別の n 枚ずつを指定ページ数だけ連続で開きます</b>（記事の連続閲覧の再現）。
+  途中でフリーズ・再読み込みしたら、このページをもう一度開いて上の記録を控えてください。<br>
+  実行: <a href="?n=150&pages=4&scroll=1">150枚 x 4ページ（計600枚）</a>
+  <a href="?n=300&pages=2&scroll=1">300枚 x 2ページ（計600枚）</a>
+  <a href="?n=600&pages=1&scroll=1">600枚 1ページ</a>
+  <a href="?n=150&pages=4&scroll=1&recycle=1">150枚 x 4ページ（リサイクルあり）</a>
 </p>
 <hr>
 <div id="imgs"></div>
 
 <script>
   const q = new URLSearchParams(location.search);
-  const n = Math.min(1000, Math.max(10, Number(q.get('n')) || 150));
+  const n = Math.min(1000, Math.max(10, Number(q.get('n')) || 300));
+  const pages = Math.min(20, Math.max(1, Number(q.get('pages')) || 1));
+  const scrollOn = q.get('scroll') !== '0';
+  const lazy = q.get('lazy') !== '0';
+  const recycle = q.get('recycle') === '1';
   const mode = q.get('mode') === 'png' ? 'png' : 'gif';
   const pngSize = q.get('size') || '32';
   const start = Number(q.get('start')) || 0;
+  const seq = Number(q.get('seq')) || 1;
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
-  const runs = (Number(sessionStorage.getItem('diag.runs')) || 0) + 1;
-  try { sessionStorage.setItem('diag.runs', String(runs)); } catch {}
+  const log = (msg) => {
+    const time = new Date().toLocaleTimeString();
+    store.set('diag2.last', `[seq ${seq}] ${msg} (${time})`);
+    let arr = [];
+    try { arr = JSON.parse(store.get('diag2.log') || '[]'); } catch {}
+    arr.push({ t: Date.now(), msg: `[seq ${seq}] ${msg}` });
+    store.set('diag2.log', JSON.stringify(arr.slice(-60)));
+    renderLog();
+  };
+  const renderLog = () => {
+    let arr = [];
+    try { arr = JSON.parse(store.get('diag2.log') || '[]'); } catch {}
+    document.getElementById('prev').textContent =
+      (arr.length ? arr.slice(-8).map((e) => new Date(e.t).toLocaleTimeString() + ' ' + e.msg).join('\n') : '記録なし');
+  };
 
-  document.getElementById('n').textContent = n + ' (' + mode + ')';
-  document.getElementById('runs').textContent = runs;
-  const last = store.get('diag.last');
-  document.getElementById('prev').textContent = last
-    ? '前回の記録: ' + last
-    : '前回の記録なし（このタブでは今回が最初）';
+  document.getElementById('n').textContent = n + ' (' + mode + (recycle ? ', recycle' : '') + ')';
+  document.getElementById('pages').textContent = pages;
+  renderLog();
 
   const started = Date.now();
-  const panel = { elapsed: document.getElementById('elapsed'), y: document.getElementById('y'), loaded: document.getElementById('loaded') };
+  const panel = {
+    elapsed: document.getElementById('elapsed'),
+    y: document.getElementById('y'),
+    loaded: document.getElementById('loaded'),
+  };
+  setInterval(() => {
+    const loaded = [...document.images].filter((i) => i.complete && i.naturalWidth > 1).length;
+    panel.elapsed.textContent = ((Date.now() - started) / 1000).toFixed(1);
+    panel.y.textContent = Math.round(scrollY);
+    panel.loaded.textContent = loaded;
+  }, 500);
+
+  log('load');
 
   fetch('/blog/macos-app-debug-utm-vm/emoji/')
     .then((r) => r.text())
@@ -61,42 +89,88 @@
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const urls = [...doc.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')]
         .map((i) => i.getAttribute('src'))
-        .filter(Boolean);
-      const chosen = urls.slice(start, start + n);
+        .filter(Boolean)
+        .slice(start, start + n);
       const frag = document.createDocumentFragment();
-      for (const raw of chosen) {
+      for (const raw of urls) {
         const u = new URL(raw);
-        let src;
         if (mode === 'png') {
           u.searchParams.delete('animation');
           u.searchParams.set('size', pngSize + 'x' + pngSize);
-          src = u.href;
-        } else {
-          src = u.href;
         }
         const img = document.createElement('img');
-        img.src = src;
+        img.src = u.href;
         img.width = 24;
         img.height = 24;
         img.alt = '';
+        if (lazy) img.loading = 'lazy';
         frag.append(img);
       }
       document.getElementById('imgs').append(frag);
+      log(`injected ${urls.length} imgs`);
+      if (recycle) injectRecycler();
+      if (scrollOn) autoScroll();
+      else scheduleNext();
     });
 
-  setInterval(() => {
-    const loaded = [...document.images].filter((i) => i.complete && i.naturalWidth > 1).length;
-    const s = ((Date.now() - started) / 1000).toFixed(1);
-    panel.elapsed.textContent = s;
-    panel.y.textContent = Math.round(scrollY);
-    panel.loaded.textContent = loaded;
-    store.set('diag.last', `n=${n} ${mode} ${s}s scrollY=${Math.round(scrollY)} loaded=${loaded} 起動${runs}回目 ${new Date().toLocaleTimeString()}`);
-  }, 500);
+  function injectRecycler() {
+    if (!('IntersectionObserver' in window)) return;
+    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+    const imgs = document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]');
+    const margin = innerHeight * 1.5;
+    const near = (img) => {
+      const r = img.getBoundingClientRect();
+      return r.bottom > -margin && r.top < innerHeight + margin;
+    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const img = e.target;
+          if (e.isIntersecting) {
+            img.loading = 'eager';
+            if (img.src !== img.dataset.src) img.src = img.dataset.src;
+          } else if (img.src !== BLANK) {
+            img.src = BLANK;
+          }
+        }
+      },
+      { rootMargin: margin + 'px 0px' },
+    );
+    for (const img of imgs) {
+      img.dataset.src = img.src;
+      if (!near(img)) img.src = BLANK;
+      io.observe(img);
+    }
+  }
 
-  addEventListener('pagehide', (e) => {
-    const prevMsg = store.get('diag.last') || '(none)';
-    store.set('diag.last', `${prevMsg} → pagehide persisted=${e.persisted} 起動${runs}回目 ${new Date().toLocaleTimeString()}`);
-  });
+  function autoScroll() {
+    const max = () => document.documentElement.scrollHeight - innerHeight;
+    let y = 0;
+    const step = () => {
+      y += 20;
+      scrollTo(0, y);
+      if (y < max()) requestAnimationFrame(step);
+      else {
+        log('scroll done');
+        scrollTo(0, max());
+        setTimeout(scheduleNext, 3000);
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  function scheduleNext() {
+    if (pages <= 1) {
+      log('run done (last page)');
+      return;
+    }
+    log('leaving for next page');
+    const u = new URL(location.href);
+    u.searchParams.set('pages', String(pages - 1));
+    u.searchParams.set('seq', String(seq + 1));
+    u.searchParams.set('start', String(start + n));
+    setTimeout(() => location.replace(u.href), 800);
+  }
 </script>
 </body>
 </html>
