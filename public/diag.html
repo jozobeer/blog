@@ -21,6 +21,8 @@
   <div>n=<span id="n">-</span> / ページ残り <span id="pages">-</span> / 経過 <span id="elapsed">0</span>s / scrollY <span id="y">0</span> / ロード済 <span id="loaded">0</span></div>
 </div>
 <p id="prev">記録なし</p>
+<p><button id="toggleRecycle" type="button">リサイクル: -</button>
+  <span class="muted">（現在の設定で記事を読む。A/B の切り替え用）</span></p>
 <h2 style="font-size:1rem">記事ページの記録</h2>
 <pre id="articleLog" style="white-space:pre-wrap;border:1px solid #444;border-radius:6px;padding:8px;font-size:12px">なし</pre>
 <p class="muted">
@@ -80,6 +82,21 @@
     if (st && st.log) for (const e of st.log.slice(-12)) lines.push(new Date(e.t).toLocaleTimeString() + ' ' + e.msg);
     document.getElementById('articleLog').textContent = lines.join('\n') || 'なし';
   }
+
+  const toggle = document.getElementById('toggleRecycle');
+  const syncToggle = () => {
+    let off = false;
+    try { off = localStorage.getItem('norecycle') === '1'; } catch {}
+    toggle.textContent = 'リサイクル: ' + (off ? 'OFF（記事側で無効）' : 'ON');
+  };
+  toggle.addEventListener('click', () => {
+    try {
+      if (localStorage.getItem('norecycle') === '1') localStorage.removeItem('norecycle');
+      else localStorage.setItem('norecycle', '1');
+    } catch {}
+    syncToggle();
+  });
+  syncToggle();
 
   const started = Date.now();
   const panel = {

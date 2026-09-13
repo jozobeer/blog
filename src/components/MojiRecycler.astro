@@ -11,6 +11,12 @@
 
 <script is:inline>
 	(() => {
+		// 一時的な診断スイッチ: ?norecycle=1 または localStorage.norecycle=1 でリサイクルを止める。
+		let off = location.search.includes('norecycle');
+		try {
+			off = off || localStorage.getItem('norecycle') === '1';
+		} catch {}
+		if (off) return;
 		const imgs = document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]');
 		if (!imgs.length || !('IntersectionObserver' in window)) return;
 
