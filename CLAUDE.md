@@ -31,7 +31,7 @@ Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環�
 
 1. **高速閲覧を目的に、JS / CSS をなるべく排除して SSG する**
    - 表示の速さが最優先指標（KPI）。OGP 生成・sitemap・画像最適化などビルド時処理は閲覧速度に無影響なので許容し、重い依存・極端なビルド遅延を避ける。
-   - クライアント JS は原則ゼロ（`client:*` や装飾用 `<script>` をデフォルトでは足さない）。**唯一の例外**は表示モード切替の 391 バイト（柱 3 参照）。足すときは「HTML/CSS で代替できないか」を先に問い、`is:inline` でバンドルさせず、JS 不在でも機能が壊れない形にする。
+   - クライアント JS は原則ゼロ（`client:*` や装飾用 `<script>` をデフォルトでは足さない）。**例外は 2 本だけ**で、どちらも短い `is:inline`（表示モード切替の 459 バイトと、mojiemoji 画像のリサイクルの 933 バイト。柱 3 参照）。足すときは「HTML/CSS で代替できないか」を先に問い、`is:inline` でバンドルさせず、JS 不在でも機能が壊れない形にする。
    - スタイルは **pico.css（classless）を 1 つだけ**導入し `<head>` に**インライン化**（`astro.config.mjs` の `build.inlineStylesheets: 'always'`。外部 CSS リクエスト無し＝初回ペイント最速。`BaseHead.astro` で `@picocss/pico/css/pico.classless.min.css` を import）。クラスは使わず**セマンティック HTML をそのまま装飾**。カスタム CSS は `src/styles/global.css`（pico の上書き用）に最小限のみ（現在 5 ルール）。`.astro` への個別 `<style>` は足さない。
 
 2. **CSS に頼らず、文脈的意味のある標準 HTML タグで表現する（規律）**
@@ -42,7 +42,8 @@ Node は `.nvmrc` で **22.12.0 に固定**（Cloudflare Pages のビルド環�
    - 高速レンダリングとは逆行するが、本文中に **mojiemoji**（`mojiemoji.jozo.beer`）を使って楽しい見た目にする。
    - 速度一辺倒ではなく "楽しさ" のための意図的なコストは許容する、という線引き。
    - **実装済み**: `.mdx` で `<Moji emoji="語" />` と書くと mojiemoji 画像になる（`src/components/Moji.astro` ＋ 純粋ロジック `src/lib/mojiemoji.ts`）。装飾は text＋出現位置から決定論的に導出（同じ語でも位置で変化・リビルドで不変）。テキストは prop（属性）で渡し Markdown 変換を回避。使い方は `docs/writing-guide.md`、設計は `docs/superpowers/specs/2026-05-25-mojiemoji-mdx-component-design.md`。
-   - **表示モード**: 記事は**既定でプレーン**（`<Moji>` が素の文字）で配信し、mojiemoji 版は `/blog/<slug>/emoji/` に静的生成して記事冒頭のセグメントコントロールから選ぶ。1記事あたり画像が数百枚・URL は全て一意でキャッシュが効かないため、既定で払わせない判断。記事ごとに frontmatter の `defaultMode` で反転できる（`mojiemoji.mdx` は `'emoji'`。mojiemoji 本体のショーケースを兼ねるため）。切替 UI は pico の `[role=group]` と `[role=button]` で描き、`global.css` の 1 ルールで「選択中＝塗り／非選択＝枠線」にする（pico 既定は選択側にホバー色を当てるが、dark ではそれが base より暗く差も出ないため）。切替リンクだけ 391 バイトのインライン JS で `location.replace()` に差し替え、モード往復が履歴に積まれないようにしている（**このブログで唯一のクライアント JS**。切替 UI を持つページのみ・外部リクエスト無し・JS 不在でも普通のリンクとして動く）。設計は `docs/superpowers/specs/2026-08-18-plain-emoji-reading-modes-design.md`。
+   - **表示モード**: 記事は**既定でプレーン**（`<Moji>` が素の文字）で配信し、mojiemoji 版は `/blog/<slug>/emoji/` に静的生成して記事冒頭のセグメントコントロールから選ぶ。1記事あたり画像が数百枚・URL は全て一意でキャッシュが効かないため、既定で払わせない判断。記事ごとに frontmatter の `defaultMode` で反転できる（`mojiemoji.mdx` は `'emoji'`。mojiemoji 本体のショーケースを兼ねるため）。切替 UI は pico の `[role=group]` と `[role=button]` で描き、`global.css` の 1 ルールで「選択中＝塗り／非選択＝枠線」にする（pico 既定は選択側にホバー色を当てるが、dark ではそれが base より暗く差も出ないため）。切替リンクだけ 459 バイトのインライン JS で `location.replace()` に差し替え、モード往復が履歴に積まれないようにしている（切替 UI を持つページのみ・外部リクエスト無し・JS 不在でも普通のリンクとして動く）。設計は `docs/superpowers/specs/2026-08-18-plain-emoji-reading-modes-design.md`。
+   - **画像のリサイクル**: emoji 版のページでは `MojiRecycler.astro` の 933 バイトが、前後 1.5 画面の外にある画像を 1×1 の透明画像へ差し替えて解放する。数百枚のアニメ GIF を一度に保持すると iPhone の Safari がメモリ上限で固まるため（実測: 対策なしは 609 枚すべてがロードされ 300MB 超、対策後は同時 148〜166 枚）。設計は `docs/superpowers/specs/2026-09-13-mojiemoji-image-recycling-design.md`。
    - **`src/lib/mojiemoji.ts` の `nextIndex()` はビルド全体で共有されるカウンタ**。呼び出し回数が変わると公開済み全記事の色・フォント・アニメが変わる。`<Moji>` を別実装に差し替えるときは、この関数を呼ばないこと。担保は「変更前の画像 URL 出現列を保存し、変更後と完全一致するか比較する」（本数一致では検出できない）。
 
 ## アーキテクチャ
