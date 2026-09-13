@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mojiemoji メモリ診断</title>
+<style>
+  body { background: #13171f; color: #c2c7d0; font: 16px/1.6 sans-serif; margin: 16px; }
+  h1 { font-size: 1.2rem; }
+  #prev { padding: 8px; border: 1px solid #444; border-radius: 6px; white-space: pre-wrap; }
+  #imgs { margin-top: 16px; }
+  #imgs img { vertical-align: middle; }
+  a { color: #6cc; }
+  .muted { color: #888; font-size: 14px; }
+  #panel { position: sticky; top: 0; background: #13171f; padding: 8px 0; border-bottom: 1px solid #333; z-index: 1; }
+</style>
+</head>
+<body>
+<h1>mojiemoji メモリ診断（一時ページ）</h1>
+<div id="panel">
+  <div>n=<span id="n">-</span> / 経過 <span id="elapsed">0</span>s / scrollY <span id="y">0</span> / ロード済 <span id="loaded">0</span> / 起動 <span id="runs">1</span>回目</div>
+</div>
+<p id="prev">前回の記録なし</p>
+<p class="muted">
+  下に n 枚の mojiemoji 画像を読み込みます（lazy なし・全枚ロード）。ゆっくり最後までスクロールし、
+  ページが再読み込みされたり固まったりしたら、上の「前回の記録」を控えてください。<br>
+  n を変えて試す: <a href="?n=150">150</a> <a href="?n=300">300</a> <a href="?n=450">450</a>
+  <a href="?n=600">600</a> / 静止画比較: <a href="?n=600&mode=png">600 png</a>
+  <a href="?n=600&mode=png&size=32">600 png 32px</a>
+</p>
+<hr>
+<div id="imgs"></div>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const n = Math.min(1000, Math.max(10, Number(q.get('n')) || 150));
+  const mode = q.get('mode') === 'png' ? 'png' : 'gif';
+  const pngSize = q.get('size') || '32';
+  const start = Number(q.get('start')) || 0;
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+  const runs = (Number(sessionStorage.getItem('diag.runs')) || 0) + 1;
+  try { sessionStorage.setItem('diag.runs', String(runs)); } catch {}
+
+  document.getElementById('n').textContent = n + ' (' + mode + ')';
+  document.getElementById('runs').textContent = runs;
+  const last = store.get('diag.last');
+  document.getElementById('prev').textContent = last
+    ? '前回の記録: ' + last
+    : '前回の記録なし（このタブでは今回が最初）';
+
+  const started = Date.now();
+  const panel = { elapsed: document.getElementById('elapsed'), y: document.getElementById('y'), loaded: document.getElementById('loaded') };
+
+  fetch('/blog/macos-app-debug-utm-vm/emoji/')
+    .then((r) => r.text())
+    .then((html) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const urls = [...doc.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]')]
+        .map((i) => i.getAttribute('src'))
+        .filter(Boolean);
+      const chosen = urls.slice(start, start + n);
+      const frag = document.createDocumentFragment();
+      for (const raw of chosen) {
+        const u = new URL(raw);
+        let src;
+        if (mode === 'png') {
+          u.searchParams.delete('animation');
+          u.searchParams.set('size', pngSize + 'x' + pngSize);
+          src = u.href;
+        } else {
+          src = u.href;
+        }
+        const img = document.createElement('img');
+        img.src = src;
+        img.width = 24;
+        img.height = 24;
+        img.alt = '';
+        frag.append(img);
+      }
+      document.getElementById('imgs').append(frag);
+    });
+
+  setInterval(() => {
+    const loaded = [...document.images].filter((i) => i.complete && i.naturalWidth > 1).length;
+    const s = ((Date.now() - started) / 1000).toFixed(1);
+    panel.elapsed.textContent = s;
+    panel.y.textContent = Math.round(scrollY);
+    panel.loaded.textContent = loaded;
+    store.set('diag.last', `n=${n} ${mode} ${s}s scrollY=${Math.round(scrollY)} loaded=${loaded} 起動${runs}回目 ${new Date().toLocaleTimeString()}`);
+  }, 500);
+
+  addEventListener('pagehide', (e) => {
+    const prevMsg = store.get('diag.last') || '(none)';
+    store.set('diag.last', `${prevMsg} → pagehide persisted=${e.persisted} 起動${runs}回目 ${new Date().toLocaleTimeString()}`);
+  });
+</script>
+</body>
+</html>
