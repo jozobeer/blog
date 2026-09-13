@@ -16,11 +16,26 @@
 		//   norecycle=1 … リサイクルを止める
 		let staticMode = false;
 		let off = location.search.includes('norecycle');
+		let ratio = 0;
 		try {
 			staticMode = location.search.includes('static') || localStorage.getItem('static') === '1';
 			off = off || localStorage.getItem('norecycle') === '1';
+			ratio = Number((location.search.match(/gifratio=(\d+)/) || [])[1] || localStorage.getItem('gifratio') || 0);
 		} catch {}
 		const imgs = document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]');
+		// 診断: N 枚に 1 枚だけ GIF を残し、残りを静止 PNG にする。
+		if (ratio > 1) {
+			let i = 0;
+			for (const img of imgs) {
+				if (i++ % ratio !== 0) {
+					const u = new URL(img.src);
+					u.searchParams.delete('animation');
+					u.searchParams.set('size', '32x32');
+					img.src = u.href;
+				}
+			}
+			return;
+		}
 		if (staticMode) {
 			for (const img of imgs) {
 				const u = new URL(img.src);

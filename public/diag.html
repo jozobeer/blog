@@ -24,6 +24,10 @@
 <p><button id="toggleRecycle" type="button">リサイクル: -</button>
   <button id="toggleStatic" type="button">静止画: -</button>
   <span class="muted">（現在の設定で記事を読む。A/B の切り替え用）</span></p>
+<p>GIF 比率:
+  <a href="?gifratio=2">1/2</a> <a href="?gifratio=4">1/4</a> <a href="?gifratio=8">1/8</a>
+  <a href="?gifratio=16">1/16</a> <a href="?gifratio=0">全部GIF</a>
+  <span id="ratioState" class="muted"></span></p>
 <h2 style="font-size:1rem">記事ページの記録</h2>
 <pre id="articleLog" style="white-space:pre-wrap;border:1px solid #444;border-radius:6px;padding:8px;font-size:12px">なし</pre>
 <p class="muted">
@@ -113,6 +117,20 @@
     syncStatic();
   });
   syncStatic();
+
+  const gr = q.get('gifratio');
+  if (gr !== null) {
+    try {
+      if (gr === '0') localStorage.removeItem('gifratio');
+      else localStorage.setItem('gifratio', gr);
+    } catch {}
+  }
+  const syncRatio = () => {
+    let val = '';
+    try { val = localStorage.getItem('gifratio') || ''; } catch {}
+    document.getElementById('ratioState').textContent = val ? `現在: 1/${val} だけ GIF` : '現在: 全部 GIF';
+  };
+  syncRatio();
 
   const started = Date.now();
   const panel = {
