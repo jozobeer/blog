@@ -1,0 +1,46 @@
+---
+// 記事中の mojiemoji 画像（アニメ GIF）を、ビューポート近傍だけ実体を持つよう管理する。
+// 数百枚を一度に保持すると iOS Safari がタブのメモリ上限で固まるため、離れた画像の src を
+// 1×1 の透明画像へ差し替えて解放する（要素の削除や visibility では解放されない）。
+// IntersectionObserver が無い環境は loading="lazy" の従来動作のまま。
+// 設計と実測は docs/superpowers/specs/2026-09-13-mojiemoji-image-recycling-design.md。
+//
+// 初期化で loading を eager に変えてはいけない: lazy で保留中だった全画像の読み込みが
+// 一斉に始まり、直後の src 差し替えで中断する。実体へ戻すときだけ eager にする。
+---
+
+<script is:inline>
+	(() => {
+		const imgs = document.querySelectorAll('img[src*="mojiemoji.jozo.beer/emoji/"]');
+		if (!imgs.length || !('IntersectionObserver' in window)) return;
+
+		const BLANK =
+			'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+		const margin = window.innerHeight * 1.5;
+		const near = (img) => {
+			const r = img.getBoundingClientRect();
+			return r.bottom > -margin && r.top < window.innerHeight + margin;
+		};
+
+		const io = new IntersectionObserver(
+			(entries) => {
+				for (const e of entries) {
+					const img = e.target;
+					if (e.isIntersecting) {
+						img.loading = 'eager';
+						if (img.src !== img.dataset.src) img.src = img.dataset.src;
+					} else if (img.src !== BLANK) {
+						img.src = BLANK;
+					}
+				}
+			},
+			{ rootMargin: `${margin}px 0px` },
+		);
+
+		for (const img of imgs) {
+			img.dataset.src = img.src;
+			if (!near(img)) img.src = BLANK;
+			io.observe(img);
+		}
+	})();
+</script>

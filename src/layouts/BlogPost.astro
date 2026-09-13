@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import FormattedDate from '../components/FormattedDate.astro';
+import MojiRecycler from '../components/MojiRecycler.astro';
 import ReadingModeSwitch from '../components/ReadingModeSwitch.astro';
 import BaseLayout from './BaseLayout.astro';
 import type { PostNeighbors } from '../lib/postNeighbors';
@@ -69,6 +70,7 @@ const alternatePath = reading.hasAlternate
 			)
 		}
 		<slot />
+		{reading.mode === 'emoji' && <MojiRecycler />}
 		{
 			(neighbors.older || neighbors.newer) && (
 				<footer>
